@@ -328,9 +328,6 @@ class UnorderedSet(T)
 
 	/++
 	 + Returns the number of elements in the set.
-	 +
-	 + Complexity:
-	 +     O(1)
 	 ++/
 	@property
 	size_t length()
@@ -340,9 +337,6 @@ class UnorderedSet(T)
 
 	/++
 	 + Creates a shallow copy of this set.
-	 +
-	 + Complexity:
-	 +     O(n)
 	 ++/
 	@property
 	UnorderedSet!T dup()
@@ -355,9 +349,6 @@ class UnorderedSet(T)
 
 	/++
 	 + Returns the element at the front of the set.
-	 +
-	 + Complexity:
-	 +     O(1)
 	 ++/
 	T front()
 	{
@@ -366,9 +357,6 @@ class UnorderedSet(T)
 
 	/++
 	 + Returns the element at the back of the set.
-	 +
-	 + Complexity:
-	 +     O(log(n))
 	 ++/
 	T back()
 	{
@@ -377,9 +365,6 @@ class UnorderedSet(T)
 
 	/++
 	 + Removes all elements from the set.
-	 +
-	 + Complexity:
-	 +     O(1)
 	 ++/
 	void clear()
 	{
@@ -392,9 +377,6 @@ class UnorderedSet(T)
 
 	/++
 	 + Produces a array from the elements in the set.
-	 +
-	 + Complexity:
-	 +     O(n)
 	 ++/
 	T[] opIndex()
 	{
@@ -406,9 +388,6 @@ class UnorderedSet(T)
 	 +
 	 + Params:
 	 +     values = The new values for this set.
-	 +
-	 + Complexity:
-	 +     O(m * log(n))
 	 ++/
 	void opAssign(T[] values)
 	{
@@ -544,6 +523,19 @@ class UnorderedSet(T)
 		return result;
 	}
 
+	int opApply(int delegate(int, ref T) func)
+	{
+		int result = 0;
+
+		foreach(idx, element; elements)
+		{
+			result = func(idx, element);
+			if(result) break;
+		}
+
+		return result;
+	}
+
 	/++
 	 + Compares two sets for equality.
 	 ++/
@@ -566,7 +558,5 @@ class UnorderedSet(T)
 		import std.conv : text;
 		return elements.text;
 	}
-
-
 
 }

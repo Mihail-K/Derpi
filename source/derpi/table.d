@@ -22,7 +22,14 @@ class ParseTable
 
 	Rule opIndex(NonTerminal n, Terminal t)
 	{
-		return table[n][t];
+		if(t in table[n])
+		{
+			return table[n][t];
+		}
+		else
+		{
+			return table[n][epsilon];
+		}
 	}
 
 	void opIndexAssign(int[] rhs, Rule rule)

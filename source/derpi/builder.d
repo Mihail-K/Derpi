@@ -23,12 +23,22 @@ class TableBuilder
 		 ++/
 		int[] rhs;
 
+		/++
+		 + Contructs a new production rule.
+		 +
+		 + Params:
+		 +     lhs = The left hand side of the rule.
+		 +     rhs = The right hand side of the rule.
+		 ++/
 		this(NonTerminal lhs, int[] rhs)
 		{
 			this.lhs = lhs;
 			this.rhs = rhs;
 		}
 
+		/++
+		 + Tests if the rule is left recursive.
+		 ++/
 		bool isLeftRecursive()
 		{
 			return lhs == rhs[0];
@@ -57,11 +67,17 @@ class TableBuilder
 			return diff;
 		}
 
+		/++
+		 + Tests for equality against another rule.
+		 ++/
 		bool opEquals(const ref Production p) const
 		{
 			return lhs == p.lhs && rhs == p.rhs;
 		}
 
+		/++
+		 + Returns a string representation of the rule.
+		 ++/
 		string toString()
 		{
 			import std.string : format;
@@ -150,6 +166,12 @@ class TableBuilder
 		return this;
 	}
 
+	/++
+	 + Constructs a parse table based on the input grammar.
+	 +
+	 + Returns:
+	 +     The constructed parse table.
+	 ++/
 	ParseTable build()
 	{
 		// Remove left recursion.
@@ -167,8 +189,25 @@ class TableBuilder
 		// Compute PREDICT sets.
 		computePredictSets;
 
-		// TODO
-		return null;
+		auto table = new ParseTable;
+
+		// Construct the parse table.
+		foreach(idx, production; productions)
+		{
+			int rule = idx + 1;
+			auto elements = predict(rule);
+
+			foreach(token; elements)
+			{
+				// Build the parse table rules.
+				table[production.lhs, token] = rule;
+			}
+
+			// Include the rhs for the rule.
+			table[rule] = production.rhs;
+		}
+
+		return table;
 	}
 
 	private
@@ -583,7 +622,6 @@ class TableBuilder
 
 }
 
-
 /+
  + Grammar 1:
  +
@@ -640,7 +678,7 @@ unittest
 		builder.Production(C, [epsilon])
 	]);
 
-	builder.build;
+	auto table = builder.build;
 
 	// Validate rule factoring and resolution.
 	assert(builder.productions == [
@@ -667,6 +705,16 @@ unittest
 	assert(builder.predict(3) == [c, Ω]);
 	assert(builder.predict(4) == [c]);
 	assert(builder.predict(5) == [Ω]);
+
+	// Validate parse table.
+	assert(table[A, Ω] == 1);
+	assert(table[A, b] == 1);
+	assert(table[B, b] == 2);
+	assert(table[B, Ω] == 3);
+	assert(table[A, c] == 1);
+	assert(table[B, c] == 3);
+	assert(table[C, c] == 4);
+	assert(table[C, Ω] == 5);
 }
 
 /+
@@ -717,7 +765,7 @@ unittest
 		builder.Production(P, [One])
 	]);
 	
-	builder.build;
+	auto table = builder.build;
 
 	// Validate rules and ordering.
 	assert(builder.productions == [
@@ -797,7 +845,7 @@ unittest
 		builder.Production(P, [One])
 	]);
 	
-	builder.build;
+	auto table = builder.build;
 	
 	// Validate rules and ordering.
 	assert(builder.productions == [
@@ -808,7 +856,6 @@ unittest
 		builder.Production(G, [P, F]),
 		builder.Production(G, [Plus, P, F])
 	]);
-
 
 	// Validate FIRST sets.
 	assert(builder.first(P) == [One]);
