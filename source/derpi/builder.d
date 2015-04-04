@@ -638,7 +638,7 @@ unittest
 		builder.Production(B, [b, B]),
 		builder.Production(B, [epsilon]),
 		builder.Production(C, [c]),
-		builder.Production(C, [epsilon]),
+		builder.Production(C, [epsilon])
 	]);
 
 	builder.build;
@@ -649,7 +649,7 @@ unittest
 		builder.Production(B, [b, B]),
 		builder.Production(B, [epsilon]),
 		builder.Production(C, [c]),
-		builder.Production(C, [epsilon]),
+		builder.Production(C, [epsilon])
 	]);
 
 	// Validate FIRST sets.
@@ -668,4 +668,79 @@ unittest
 	assert(builder.predict(3) == [c, Ω]);
 	assert(builder.predict(4) == [c]);
 	assert(builder.predict(5) == [Ω]);
+}
+
+/+
+ + Grammar 2:
+ +
+ + E → E + E
+ +   | P
+ +
+ + P → 1
+ +
+ +/
+unittest
+{
+	/++
+	 + Define grammar tokens.
+	 ++/
+	enum : int
+	{
+
+		// Terminals
+
+		One = -3,
+		Plus = -2,
+
+		// Non Terminals
+
+		E = 1,
+		P = 2,
+		F = 3
+
+	}
+
+	auto builder = new TableBuilder;
+
+	builder
+		.addRule(E, [E, Plus, E])
+		.addRule(E, [P])
+		.addRule(P, [One]);
+
+	// Validate token sets.
+	assert(builder.terminals == [One, Plus]);
+	assert(builder.nonterminals == [E, P]);
+
+	// Validate rules and ordering.
+	assert(builder.productions == [
+		builder.Production(E, [E, Plus, E]),
+		builder.Production(E, [P]),
+		builder.Production(P, [One])
+	]);
+	
+	builder.build;
+
+	// Validate rules and ordering.
+	assert(builder.productions == [
+		builder.Production(P, [One]),
+		builder.Production(E, [P, F]),
+		builder.Production(F, [Plus, P, F]),
+		builder.Production(F, [epsilon])
+	]);
+
+	// Validate FIRST sets.
+	assert(builder.first(P) == [One]);
+	assert(builder.first(E) == [One]);
+	assert(builder.first(F) == [Plus, epsilon]);
+
+	// Validate FOLLOW sets.
+	assert(builder.follow(P) == [Plus, eof]);
+	assert(builder.follow(E) == [eof]);
+	assert(builder.follow(F) == [eof]);
+
+	// Validate PREDICT sets.
+	assert(builder.predict(1) == [One]);
+	assert(builder.predict(2) == [One]);
+	assert(builder.predict(3) == [Plus]);
+	assert(builder.predict(4) == [eof]);
 }
