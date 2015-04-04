@@ -434,13 +434,12 @@ class TableBuilder
 						// A → αA'
 						productions ~= Production(production.lhs, [production.rhs[0], tail]);
 
-						import std.stdio;
 						foreach(rhs; gamma)
 						{
 							// A' → ɣ₁ | ɣ₂ | ... | ɣₙ
 							productions ~= Production(tail, rhs[1 .. $]);
 						}
-
+						
 						// Add tail to nonterminals.
 						nonterminals ~= tail;
 						changed = true;
@@ -743,4 +742,91 @@ unittest
 	assert(builder.predict(2) == [One]);
 	assert(builder.predict(3) == [Plus]);
 	assert(builder.predict(4) == [eof]);
+}
+
+
+/+
+ + Grammar 3:
+ +
+ + E → E + E
+ +   | E + + E
+ +   | P
+ +
+ + P → 1
+ +
+ +/
+unittest
+{
+	/++
+	 + Define grammar tokens.
+	 ++/
+	enum : int
+	{
+
+		// Terminals
+
+		One = -3,
+		Plus = -2,
+
+		// Non Terminals
+
+		E = 1,
+		P = 2,
+		F = 3,
+		G = 4
+
+	}
+
+	auto builder = new TableBuilder;
+
+	builder
+		.addRule(E, [E, Plus, E])
+		.addRule(E, [E, Plus, Plus, E])
+		.addRule(E, [P])
+		.addRule(P, [One]);
+
+	// Validate token sets.
+	assert(builder.terminals == [One, Plus]);
+	assert(builder.nonterminals == [E, P]);
+
+	// Validate rules and ordering.
+	assert(builder.productions == [
+		builder.Production(E, [E, Plus, E]),
+		builder.Production(E, [E, Plus, Plus, E]),
+		builder.Production(E, [P]),
+		builder.Production(P, [One])
+	]);
+	
+	builder.build;
+	
+	// Validate rules and ordering.
+	assert(builder.productions == [
+		builder.Production(P, [One]),
+		builder.Production(E, [P, F]),
+		builder.Production(F, [epsilon]),
+		builder.Production(F, [Plus, G]),
+		builder.Production(G, [P, F]),
+		builder.Production(G, [Plus, P, F])
+	]);
+
+
+	// Validate FIRST sets.
+	assert(builder.first(P) == [One]);
+	assert(builder.first(E) == [One]);
+	assert(builder.first(F) == [Plus, epsilon]);
+	assert(builder.first(G) == [One, Plus]);
+	
+	// Validate FOLLOW sets.
+	assert(builder.follow(P) == [Plus, eof]);
+	assert(builder.follow(E) == [eof]);
+	assert(builder.follow(F) == [eof]);
+	assert(builder.follow(G) == [eof]);
+
+	// Validate PREDICT sets.
+	assert(builder.predict(1) == [One]);
+	assert(builder.predict(2) == [One]);
+	assert(builder.predict(3) == [eof]);
+	assert(builder.predict(4) == [Plus]);
+	assert(builder.predict(5) == [One]);
+	assert(builder.predict(6) == [Plus]);
 }
