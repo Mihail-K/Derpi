@@ -14,11 +14,6 @@ class TableBuilder
 	{
 
 		/++
-		 + The number of the production rule.
-		 ++/
-		Rule rule;
-
-		/++
 		 + The left hand side of the rule.
 		 ++/
 		NonTerminal lhs;
@@ -28,15 +23,8 @@ class TableBuilder
 		 ++/
 		int[] rhs;
 
-		this(NonTerminal hls, int[] rhs)
+		this(NonTerminal lhs, int[] rhs)
 		{
-			this.lhs = lhs;
-			this.rhs = rhs;
-		}
-
-		this(Rule rule, NonTerminal lhs, int[] rhs)
-		{
-			this.rule = rule;
 			this.lhs = lhs;
 			this.rhs = rhs;
 		}
@@ -131,9 +119,7 @@ class TableBuilder
 	TableBuilder addRule(NonTerminal lhs, int[] rhs)
 	{
 		// Create a production rule.
-		productions ~= Production(
-			productions.length, lhs, rhs
-		);
+		productions ~= Production(lhs, rhs);
 
 		// Register tokens.
 		nonterminals ~= lhs;
@@ -159,14 +145,43 @@ class TableBuilder
 		// Remove left recursion.
 		removeLeftRecursion;
 
+		// Remove FIRST/FIRST conflicts.
+		removeFirstFirstConflicts;
+
 		// Compute FIRST sets.
 		computeFirstSets;
 
 		// Compute FOLLOW sets.
 		computeFollowSets;
 
+		// Compute PREDICT sets.
+		computePredictSets;
+
 		// TODO
 		return null;
+	}
+
+	void displayDebugInfo()
+	{
+		import std.stdio;
+
+		writefln("Terminals:\n%s", terminals);
+		writeln;
+
+		writefln("Non Terminals:\n%s", nonterminals);
+		writeln;
+
+		writefln("Production Rules:\n%s", productions);
+		writeln;
+
+		writefln("FIRST sets:\n%s", firstSets);
+		writeln;
+
+		writefln("FOLLOW sets:\n%s", followSets);
+		writeln;
+
+		writefln("PREDICT sets:\n%s", predictSets);
+		writeln;
 	}
 
 	private
@@ -183,7 +198,7 @@ class TableBuilder
 		 + Returns:
 		 +     An ordered set of terminals.
 		 ++/
-		OrderedSet!Terminal first(int[] alpha...)
+		OrderedSet!Terminal first(NonTerminal[] alpha...)
 		{
 			int count = 0;
 			auto sets = new OrderedSet!int;
@@ -222,11 +237,45 @@ class TableBuilder
 			return sets;
 		}
 
+		/++
+		 + Let α be a nonterminal.
+		 + FOLLOW(α) is the union over FIRST(β) where β is any nonterminal that
+		 + immidiately follows α in the right hand side of a production rule.
+		 +
+		 + Params:
+		 +     alpha = A nonterminal.
+		 +
+		 + Returns:
+		 +     An ordered set of terminals.
+		 ++/
+		OrderedSet!Terminal follow(NonTerminal alpha)
+		{
+			return followSets[alpha];
+		}
+
+		/++
+		 + Let A be a production rule.
+		 + PREDICT(A) is the set of all FIRST tokens that can be derived from A.
+		 +
+		 + Params:
+		 +     production = A production rule in the grammar.
+		 +
+		 + Returns:
+		 +     An ordered set of terminals.
+		 ++/
+		OrderedSet!Terminal predict(Rule rule)
+		{
+			return predictSets[rule];
+		}
+
 	}
 
 	private
 	{
 	
+		/++
+		 + Returns a list of production rules with the given lhs.
+		 ++/
 		Production[] getFromCache(NonTerminal lhs)
 		{
 			// Check for cached rules.
@@ -279,14 +328,18 @@ class TableBuilder
 		{
 			int[][] result;
 
+			// α → α₁, α₂, ..., αₙ
 			foreach(alphaRule; alpha)
 			{
+				// If ε ∈ αᵢ
 				if(alphaRule.canFind(lhs))
 				{
+					// β → β₁, β₂, ..., βₘ
 					foreach(betaRule; beta)
 					{
 						int[] rhs;
 
+						// Substitute A with β.
 						foreach(token; alphaRule)
 						{
 							if(token == lhs)
@@ -340,23 +393,65 @@ class TableBuilder
 						foreach(rhs; beta)
 						{
 							// A → β₁A' | β₂A' | ... | βₘA'
-							productions ~= Production(
-								productions.length, lhs, rhs ~ tail
-							);
+							productions ~= Production(lhs, rhs ~ tail);
 						}
 
 						foreach(rhs; alpha)
 						{
 							// A' → α₁A' | α₂A' | ... | αₙA'
-							productions ~= Production(
-								productions.length, tail, rhs ~ tail
-							);
+							productions ~= Production(tail, rhs ~ tail);
 						}
 						
 						// A' → ε
-						productions ~= Production(
-							productions.length, tail, [epsilon]
-						);
+						productions ~= Production(tail, [epsilon]);
+
+						// Add tail to nonterminals.
+						nonterminals ~= tail;
+						changed = true;
+						break;
+					}
+				}
+			}
+		}
+
+		int[][] getGammaSets(Production production)
+		{
+			return getFromCache(production.lhs)
+				.filter!(p => p.rhs[0] == production.rhs[0])
+				.map!(p => p.rhs)
+				.array;
+		}
+
+		void removeFirstFirstConflicts()
+		{
+			// Loop until equilibrium.
+			for(bool changed = true; changed;)
+			{
+				changed = false;
+				
+				// A → αɣ₁ | αɣ₂ | ... | Aɣₙ
+				foreach(production; productions)
+				{
+					int[][] gamma = getGammaSets(production);
+
+					if(gamma.length > 1)
+					{
+						// A' := max(A) + 1
+						int tail = nonterminals.reduce!max + 1;
+
+						// Remove FIRST/FIRST conflicting rules from grammar and cache.
+						productions = productions[].filter!(p =>
+							 p.lhs != production.lhs || p.rhs[0] != production.rhs[0]).array;
+						productionCache.remove(production.lhs);
+
+						// A → αA'
+						productions ~= Production(production.lhs, [production.rhs[0], tail]);
+
+						foreach(rhs; gamma)
+						{
+							// A' → ɣ₁ | ɣ₂ | ... | ɣₙ
+							productions ~= Production(tail, production.rhs[1 .. $]);
+						}
 
 						// Add tail to nonterminals.
 						nonterminals ~= tail;
@@ -473,6 +568,34 @@ class TableBuilder
 							changed |= initial != followSets[B];
 						}
 					}
+				}
+			}
+		}
+		
+		/++
+		 + Returns the next sequential rule id.
+		 ++/
+		int nextRule()
+		{
+			static int rule = 0;
+			return rule++;
+		}
+
+		void computePredictSets()
+		{
+			foreach(production; productions)
+			{
+				int rule = nextRule;
+				auto falpha = first(production.rhs);
+
+				// PREDICT(A → α) := FIRST(α)
+				predictSets[rule] = falpha - epsilon;
+
+				// If ε ∈ FIRST(α)
+				if(epsilon in falpha)
+				{
+					// PREDICT(A → α) ∪ FOLLOW(A)
+					predictSets[rule] ~= follow(production.lhs);
 				}
 			}
 		}
