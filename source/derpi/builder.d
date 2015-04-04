@@ -100,6 +100,22 @@ class TableBuilder
 		 ++/
 		Production[][NonTerminal] productionCache;
 
+		
+		/++
+		 + The computed FIRST sets for the grammar.
+		 ++/
+		OrderedSet!Terminal[int] firstSets;
+
+		/++
+		 + The computed FOLLOW sets for the grammar.
+		 ++/
+		OrderedSet!Terminal[int] followSets;
+
+		/++
+		 + The computed PREDICT sets for the grammar.
+		 ++/
+		OrderedSet!Terminal[int] predictSets;
+
 	}
 
 	this()
@@ -142,6 +158,9 @@ class TableBuilder
 	{
 		// Remove left recursion.
 		removeLeftRecursion;
+
+		// Compute FIRST sets.
+		computeFirstSets;
 
 		// TODO
 		return null;
@@ -286,6 +305,73 @@ class TableBuilder
 						changed = true;
 						break;
 					}
+				}
+			}
+		}
+
+		void computeFirstSets()
+		{
+			// Build sets of terminals.
+			foreach(t; terminals)
+			{
+				firstSets[t] = new OrderedSet!Terminal(t);
+			}
+
+			// Include epsilon in the FIRST sets.
+			firstSets[epsilon] = new OrderedSet!Terminal(epsilon);
+
+			// Initialize sets of nonterminals.
+			foreach(n; nonterminals)
+			{
+				firstSets[n] = new OrderedSet!Terminal;
+			}
+
+			// Loop until equilibrium.
+			for(bool changed = true; changed;)
+			{
+				changed = false;
+
+				foreach(production; productions)
+				{
+					int count = 0;
+					int X = production.lhs;
+
+					// Save the old value of the FIRST set.
+					auto initial = firstSets[X].dup;
+
+					// For each X → Y₁, Y₂, ..., Yₖ
+					foreach(i, Y; production.rhs)
+					{
+						// If ε ∈ FIRST(Yᵢ)
+						if(epsilon in firstSets[Y])
+						{
+							count++;
+						}
+
+						if(i == 0)
+						{
+							// FIRST(X) ∪ { FIRST(Yᵢ) - ε } 
+							firstSets[X] ~= firstSets[Y] - epsilon;
+						}
+						else
+						{
+							// If ε in FIRST(Yᵢ₋₁) when 1 < i ≤ k
+							if(epsilon in firstSets[production.rhs[i - 1]])
+							{
+								// FIRST(X) ∪ { FIRST(Yᵢ) - ε }
+								firstSets[X] ~= firstSets[Y] - epsilon;
+							}
+						}
+					}
+
+					// If ε ∈ FIRST(Yᵢ) for 1 ≤ i ≤ k
+					if(count == production.rhs.length)
+					{
+						firstSets[X] ~= epsilon;
+					}
+
+					// Check if the FIRST set was changed.
+					changed |= initial != firstSets[X];
 				}
 			}
 		}
