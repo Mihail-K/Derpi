@@ -8,9 +8,19 @@ alias Terminal = int;
 alias NonTerminal = int;
 
 /++
+ + Constant start.
+ ++/
+enum int start = 1;
+
+/++
  + Constant epsilon.
  ++/
 enum int epsilon = 0;
+
+/++
+ + Constant eof.
+ ++/
+enum int eof = -1;
 
 /++
  + A type representing an ordered set of unique values.

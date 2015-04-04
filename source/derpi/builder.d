@@ -162,8 +162,66 @@ class TableBuilder
 		// Compute FIRST sets.
 		computeFirstSets;
 
+		// Compute FOLLOW sets.
+		computeFollowSets;
+
 		// TODO
 		return null;
+	}
+
+	private
+	{
+	
+		/++
+		 + Let α be a nonterminal.
+		 + FIRST(α) is the set of terminals that can appear in the first position
+		 + of any string derived from α.
+		 +
+		 + Params:
+		 +     alpha = A nonterminal.
+		 +
+		 + Returns:
+		 +     An ordered set of terminals.
+		 ++/
+		OrderedSet!Terminal first(int[] alpha...)
+		{
+			int count = 0;
+			auto sets = new OrderedSet!int;
+
+			// For each α → X₁, X₂, ..., Xₖ
+			foreach(i, X; alpha)
+			{
+				// If ε ∈ FIRST(Xᵢ)
+				if(epsilon in firstSets[X])
+				{
+					count++;
+				}
+
+				if(i == 0)
+				{
+					// FIRST(α) ∪ { FIRST(Xᵢ) - ε } 
+					sets ~= firstSets[X] - epsilon;
+				}
+				else
+				{
+					// If ε ∈ FIRST(Xᵢ₋₁) when 1 < i ≤ k
+					if(epsilon in firstSets[alpha[i - 1]])
+					{
+						// FIRST(α) ∪ { FIRST(Xᵢ) - ε }
+						sets ~= firstSets[X] - epsilon;
+					}
+				}
+			}
+		
+			// If ε ∈ FIRST(Yᵢ) for 1 ≤ i ≤ k
+			if(count == alpha.length)
+			{
+				sets ~= epsilon;
+			}
+
+			return sets;
+		}
+
 	}
 
 	private
@@ -372,6 +430,49 @@ class TableBuilder
 
 					// Check if the FIRST set was changed.
 					changed |= initial != firstSets[X];
+				}
+			}
+		}
+
+		void computeFollowSets()
+		{
+			// FOLLOWS(...) := { }
+			foreach(n; nonterminals)
+			{
+				followSets[n] = new OrderedSet!int;
+			}
+
+			// FOLLOW(S) := EOF
+			followSets[start] = new OrderedSet!int(eof);
+
+			// Loop until equilibrium.
+			for(bool changed = true; changed;)
+			{
+				changed = false;
+
+				foreach(production; productions)
+				{
+					int A = production.lhs;
+
+					foreach(i, B; production.rhs)
+					{
+						if(B > epsilon)
+						{
+							// Save the old value of the FOLLOW set.
+							auto initial = followSets[B].dup;
+
+							int[] beta = production.rhs[i + 1 .. $];
+
+							followSets[B] ~= first(beta) - epsilon;
+							if(beta.length == 0 || epsilon in first(beta))
+							{
+								followSets[B] ~= followSets[A];
+							}
+							
+							// Check if the FOLLOW set was changed.
+							changed |= initial != followSets[B];
+						}
+					}
 				}
 			}
 		}
