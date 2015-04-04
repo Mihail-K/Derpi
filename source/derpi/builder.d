@@ -51,12 +51,12 @@ class TableBuilder
 			// Compare lhs values.
 			int diff = p.lhs - lhs;
 
-			if(diff != 0)
+			if(diff == 0)
 			{
 				// Compare rhs lengths.
 				diff = p.rhs.length - rhs.length;
 
-				if(diff != 0)
+				if(diff == 0)
 				{
 					// Compare rhs values.
 					foreach(i, v; rhs)
@@ -175,28 +175,65 @@ class TableBuilder
 		/++
 		 + Returns a list of non-empty left-recursive rules.
 		 ++/
-		Production[] getAlphaSets(NonTerminal lhs)
+		int[][] getAlphaSets(NonTerminal lhs)
 		{
 			return getFromCache(lhs)
 				.filter!(p => p.rhs[0] == lhs)
 				.filter!(p => p.rhs[1 .. $] != [epsilon])
+				.map!(p => p.rhs[1 .. $])
 				.array;
 		}
 
 		/++
 		 + Returns a list of non-left-recursive rules.
 		 ++/
-		Production[] getBetaSets(NonTerminal lhs)
+		int[][] getBetaSets(NonTerminal lhs)
 		{
 			return getFromCache(lhs)
 				.filter!(p => p.rhs[0] != lhs)
+				.map!(p => p.rhs)
 				.array;
+		}
+
+		/++
+		 + Replaces ambiguous references to A in α with β.
+		 ++/
+		int[][] expandAmbiguous(NonTerminal lhs, int[][] alpha, int[][] beta)
+		{
+			int[][] result;
+
+			foreach(alphaRule; alpha)
+			{
+				if(alphaRule.canFind(lhs))
+				{
+					foreach(betaRule; beta)
+					{
+						int[] rhs;
+
+						foreach(token; alphaRule)
+						{
+							if(token == lhs)
+							{
+								rhs ~= betaRule;
+							}
+							else
+							{
+								rhs ~= token;
+							}
+						}
+
+						result ~= rhs;
+					}
+				}
+			}
+
+			return result;
 		}
 		
 		void removeLeftRecursion()
 		{
 			// Loop until equilibrium.
-			for(bool changed; changed;)
+			for(bool changed = true; changed;)
 			{
 				changed = false;
 
@@ -205,32 +242,37 @@ class TableBuilder
 					// A → Aα₁ | ... | Aαₙ | β₁ | ... | βₘ
 					if(production.isLeftRecursive)
 					{
+						int lhs = production.lhs;
+
 						// A' := max(A) + 1
-						int tail = productions.length + 1;
+						int tail = nonterminals.reduce!max + 1;
 					
 						// α → α₁, α₂, ..., αₙ
-						Production[] alpha = getAlphaSets(production.lhs);
+						int[][] alpha = getAlphaSets(lhs);
 					
 						// β → β₁, β₂, ..., βₘ
-						Production[] beta = getBetaSets(production.lhs);
+						int[][] beta = getBetaSets(lhs);
+						
+						// Expand ambiguous references to A in α.
+						alpha = expandAmbiguous(lhs, alpha, beta);
 
 						// Remove left recursive rules from grammar and cache.
-						productions = productions[].filter!"!a.isLeftRecursive".array;
-						productionCache.remove(production.lhs);
+						productions = productions[].filter!(p => p.lhs != lhs).array;
+						productionCache.remove(lhs);
 
-						foreach(rule; beta)
+						foreach(rhs; beta)
 						{
 							// A → β₁A' | β₂A' | ... | βₘA'
 							productions ~= Production(
-								productions.length, rule.lhs, rule.rhs ~ tail
+								productions.length, lhs, rhs ~ tail
 							);
 						}
 
-						foreach(rule; alpha)
+						foreach(rhs; alpha)
 						{
 							// A' → α₁A' | α₂A' | ... | αₙA'
 							productions ~= Production(
-								productions.length, tail, rule.rhs ~ tail
+								productions.length, tail, rhs ~ tail
 							);
 						}
 						
