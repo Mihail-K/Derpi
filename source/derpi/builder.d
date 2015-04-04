@@ -88,7 +88,7 @@ class TableBuilder
 		/++
 		 + The set of production rules in the grammar.
 		 ++/
-		OrderedSet!Production productions;
+		UnorderedSet!Production productions;
 
 		/++
 		 + An lhs-indexed cache for production rules.
@@ -113,11 +113,14 @@ class TableBuilder
 
 	}
 
+	/++
+	 + Constructs an empty parse table builder.
+	 ++/
 	this()
 	{
 		terminals = new OrderedSet!Terminal;
 		nonterminals = new OrderedSet!NonTerminal;
-		productions = new OrderedSet!Production;
+		productions = new UnorderedSet!Production;
 	}
 
 	/++
@@ -166,29 +169,6 @@ class TableBuilder
 
 		// TODO
 		return null;
-	}
-
-	void displayDebugInfo()
-	{
-		import std.stdio;
-
-		writefln("Terminals:\n%s", terminals);
-		writeln;
-
-		writefln("Non Terminals:\n%s", nonterminals);
-		writeln;
-
-		writefln("Production Rules:\n%s", productions);
-		writeln;
-
-		writefln("FIRST sets:\n%s", firstSets);
-		writeln;
-
-		writefln("FOLLOW sets:\n%s", followSets);
-		writeln;
-
-		writefln("PREDICT sets:\n%s", predictSets);
-		writeln;
 	}
 
 	private
@@ -582,7 +562,7 @@ class TableBuilder
 		
 		void computePredictSets()
 		{
-			int nextRule = 0;
+			int nextRule = 1;
 			foreach(production; productions)
 			{
 				int rule = nextRule++;
@@ -602,4 +582,90 @@ class TableBuilder
 
 	}
 
+}
+
+
+/+
+ + Grammar 1:
+ +
+ + A → B C Ω
+ + 
+ + B → bB
+ +   | ε
+ +
+ + C → c
+ +   | ε
+ +
+ +/
+unittest
+{
+	/++
+	 + Define grammar tokens.
+	 ++/
+	enum : int
+	{
+
+		// Terminals
+
+		c = -4,
+		b = -3,
+		Ω = -2,
+
+		// Non Terminals
+		
+		A = 1,
+		B = 2,
+		C = 3
+
+	}
+
+	auto builder = new TableBuilder;
+
+	builder
+		.addRule(A, [B, C, Ω])
+		.addRule(B, [b, B])
+		.addRule(B, [epsilon])
+		.addRule(C, [c])
+		.addRule(C, [epsilon]);
+
+	// Validate token sets.
+	assert(builder.terminals == [c, b, Ω]);
+	assert(builder.nonterminals == [A, B, C]);
+
+	// Validate rules and ordering.
+	assert(builder.productions == [
+		builder.Production(A, [B, C, Ω]),
+		builder.Production(B, [b, B]),
+		builder.Production(B, [epsilon]),
+		builder.Production(C, [c]),
+		builder.Production(C, [epsilon]),
+	]);
+
+	builder.build;
+
+	// Validate rule factoring and resolution.
+	assert(builder.productions == [
+		builder.Production(A, [B, C, Ω]),
+		builder.Production(B, [b, B]),
+		builder.Production(B, [epsilon]),
+		builder.Production(C, [c]),
+		builder.Production(C, [epsilon]),
+	]);
+
+	// Validate FIRST sets.
+	assert(builder.first(A) == [c, b, Ω]);
+	assert(builder.first(B) == [b, epsilon]);
+	assert(builder.first(C) == [c, epsilon]);
+
+	// Validate FOLLOW sets.
+	assert(builder.follow(A) == [eof]);
+	assert(builder.follow(B) == [c, Ω]);
+	assert(builder.follow(C) == [Ω]);
+
+	// Validate PREDICT sets.
+	assert(builder.predict(1) == [c, b, Ω]);
+	assert(builder.predict(2) == [b]);
+	assert(builder.predict(3) == [c, Ω]);
+	assert(builder.predict(4) == [c]);
+	assert(builder.predict(5) == [Ω]);
 }
