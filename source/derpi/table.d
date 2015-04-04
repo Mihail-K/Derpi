@@ -26,9 +26,13 @@ class ParseTable
 		{
 			return table[n][t];
 		}
-		else
+		else if(epsilon in table[n])
 		{
 			return table[n][epsilon];
+		}
+		else
+		{
+			return epsilon;
 		}
 	}
 

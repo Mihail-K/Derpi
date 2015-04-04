@@ -709,12 +709,15 @@ unittest
 	// Validate parse table.
 	assert(table[A, Ω] == 1);
 	assert(table[A, b] == 1);
-	assert(table[B, b] == 2);
-	assert(table[B, Ω] == 3);
 	assert(table[A, c] == 1);
+
+	assert(table[B, Ω] == 3);
+	assert(table[B, b] == 2);
 	assert(table[B, c] == 3);
-	assert(table[C, c] == 4);
+
+	assert(table[C, b] == 0);
 	assert(table[C, Ω] == 5);
+	assert(table[C, c] == 4);
 }
 
 /+
@@ -790,6 +793,19 @@ unittest
 	assert(builder.predict(2) == [One]);
 	assert(builder.predict(3) == [Plus]);
 	assert(builder.predict(4) == [eof]);
+
+	// Validate parse table.
+	assert(table[P, One] == 1);
+	assert(table[P, Plus] == 0);
+	assert(table[P, eof] == 0);
+
+	assert(table[E, One] == 2);
+	assert(table[E, Plus] == 0);
+	assert(table[E, eof] == 0);
+
+	assert(table[F, One] == 0);
+	assert(table[F, Plus] == 3);
+	assert(table[F, eof] == 4);
 }
 
 
