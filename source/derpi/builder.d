@@ -37,19 +37,19 @@ class TableBuilder
 		int opCmp(Production p)
 		{
 			// Compare lhs values.
-			int diff = p.lhs - lhs;
+			int diff = lhs - p.lhs;
 
 			if(diff == 0)
 			{
 				// Compare rhs lengths.
-				diff = p.rhs.length - rhs.length;
+				diff = rhs.length - p.rhs.length;
 
 				if(diff == 0)
 				{
 					// Compare rhs values.
 					foreach(i, v; rhs)
 					{
-						diff += p.rhs[i] - v;
+						diff += v - p.rhs[i];
 					}
 				}
 			}
@@ -60,6 +60,13 @@ class TableBuilder
 		bool opEquals(const ref Production p) const
 		{
 			return lhs == p.lhs && rhs == p.rhs;
+		}
+
+		string toString()
+		{
+			import std.string : format;
+
+			return format("[%d : %(%d, %)]", lhs, rhs);
 		}
 
 	}
@@ -447,10 +454,11 @@ class TableBuilder
 						// A → αA'
 						productions ~= Production(production.lhs, [production.rhs[0], tail]);
 
+						import std.stdio;
 						foreach(rhs; gamma)
 						{
 							// A' → ɣ₁ | ɣ₂ | ... | ɣₙ
-							productions ~= Production(tail, production.rhs[1 .. $]);
+							productions ~= Production(tail, rhs[1 .. $]);
 						}
 
 						// Add tail to nonterminals.
@@ -572,20 +580,12 @@ class TableBuilder
 			}
 		}
 		
-		/++
-		 + Returns the next sequential rule id.
-		 ++/
-		int nextRule()
-		{
-			static int rule = 0;
-			return rule++;
-		}
-
 		void computePredictSets()
 		{
+			int nextRule = 0;
 			foreach(production; productions)
 			{
-				int rule = nextRule;
+				int rule = nextRule++;
 				auto falpha = first(production.rhs);
 
 				// PREDICT(A → α) := FIRST(α)
