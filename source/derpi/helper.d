@@ -13,6 +13,7 @@ alias NonTerminal = int;
 class OrderedSet(T)
 {
 
+	import std.array;
 	import std.container;
 
 	/++
