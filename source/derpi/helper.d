@@ -8,6 +8,11 @@ alias Terminal = int;
 alias NonTerminal = int;
 
 /++
+ + Constant epsilon.
+ ++/
+enum int epsilon = 0;
+
+/++
  + A type representing an ordered set of unique values.
  ++/
 class OrderedSet(T)
@@ -217,6 +222,19 @@ class OrderedSet(T)
 	{
 		elements.remove(set.elements[]);
 		return set;
+	}
+
+	int opApply(int delegate(ref T) func)
+	{
+		int result = 0;
+
+		foreach(element; elements[])
+		{
+			result = func(element);
+			if(result) break;
+		}
+
+		return result;
 	}
 
 	/++
