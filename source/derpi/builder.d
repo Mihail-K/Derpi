@@ -1,91 +1,122 @@
 
 module derpi.builder;
 
+import std.array;
+import std.algorithm;
+
 import derpi.table;
 import derpi.helper;
 
-class TableBuilder
+class Production
 {
 
-	import std.array;
-	import std.algorithm;
+	/++
+	 + The left hand side of the rule.
+	 ++/
+	NonTerminal lhs;
 
-	struct Production
+	/++
+	 + The right hand side of the rule.
+	 ++/
+	int[][] rhs;
+
+	/++
+	 + Contructs a new production rule.
+	 +
+	 + Params:
+	 +     lhs = The left hand side of the rule.
+	 ++/
+	this(NonTerminal lhs, int[][] rhs = []...)
 	{
-
-		/++
-		 + The left hand side of the rule.
-		 ++/
-		NonTerminal lhs;
-
-		/++
-		 + The right hand side of the rule.
-		 ++/
-		int[] rhs;
-
-		/++
-		 + Contructs a new production rule.
-		 +
-		 + Params:
-		 +     lhs = The left hand side of the rule.
-		 +     rhs = The right hand side of the rule.
-		 ++/
-		this(NonTerminal lhs, int[] rhs)
-		{
-			this.lhs = lhs;
-			this.rhs = rhs;
-		}
-
-		/++
-		 + Tests if the rule is left recursive.
-		 ++/
-		bool isLeftRecursive()
-		{
-			return lhs == rhs[0];
-		}
-
-		int opCmp(Production p)
-		{
-			// Compare lhs values.
-			int diff = lhs - p.lhs;
-
-			if(diff == 0)
-			{
-				// Compare rhs lengths.
-				diff = rhs.length - p.rhs.length;
-
-				if(diff == 0)
-				{
-					// Compare rhs values.
-					foreach(i, v; rhs)
-					{
-						diff += v - p.rhs[i];
-					}
-				}
-			}
-
-			return diff;
-		}
-
-		/++
-		 + Tests for equality against another rule.
-		 ++/
-		bool opEquals(const ref Production p) const
-		{
-			return lhs == p.lhs && rhs == p.rhs;
-		}
-
-		/++
-		 + Returns a string representation of the rule.
-		 ++/
-		string toString()
-		{
-			import std.string : format;
-
-			return format("[%d : %(%d, %)]", lhs, rhs);
-		}
-
+		this.lhs = lhs;
+		this.rhs = rhs;
 	}
+
+	/++
+	 + Tests if the ruleset is left recursive.
+	 ++/
+	bool isLeftRecursive()
+	{
+		return rhs.filter!(r => r[0] == lhs).any;
+	}
+
+	/++
+	 + Returns the alpha fragments of left recursive rules in this production set.
+	 ++/
+	int[][] getAlphaSets()
+	{
+		if(isLeftRecursive)
+		{
+			return rhs
+				.filter!(r => r[0] == lhs)
+				.filter!(r => r != [epsilon])
+				.map!(r => r[1 .. $])
+				.array;
+		}
+		else
+		{
+			// No alpha sets.
+			return [[]];
+		}
+	}
+
+	/++
+	 + Returns the beta fragments of non left recursive rules in this production set.
+	 ++/
+	int[][] getBetaSets()
+	{
+		if(isLeftRecursive)
+		{
+			return rhs
+				.filter!(r => r[0] != lhs)
+				.array;
+		}
+		else
+		{
+			return [[]];
+		}
+	}
+
+	/++
+	 + Returns the gamma fragments of FIRST/FIRST colliding rules in this production set.
+	 ++/
+	int[][] getGammaSets(int leftmost)
+	{
+		return rhs
+			.filter!(r => r[0] == leftmost)
+			.array;
+	}
+
+	override int opCmp(Object o)
+	{
+		// Compare lhs values.
+		Production p = cast(Production)o;
+		return lhs - p.lhs;
+	}
+
+	/++
+	 + Tests for equality against another rule.
+	 ++/
+	override bool opEquals(Object o)
+	{
+		Production p = cast(Production)o;
+		return o ? lhs == p.lhs && rhs == p.rhs : false;
+	}
+
+	/++
+	 + Returns a string representation of the rule.
+	 ++/
+	override string toString()
+	{
+		import std.string : format;
+
+		return format("[%d : %(%s, %)]", lhs, rhs);
+	}
+
+}
+
+class TableBuilder
+{
 
 	private
 	{
@@ -104,12 +135,7 @@ class TableBuilder
 		/++
 		 + The set of production rules in the grammar.
 		 ++/
-		UnorderedSet!Production productions;
-
-		/++
-		 + An lhs-indexed cache for production rules.
-		 ++/
-		Production[][NonTerminal] productionCache;
+		OrderedSet!Production productions;
 
 		
 		/++
@@ -136,7 +162,7 @@ class TableBuilder
 	{
 		terminals = new OrderedSet!Terminal;
 		nonterminals = new OrderedSet!NonTerminal;
-		productions = new UnorderedSet!Production;
+		productions = new OrderedSet!Production;
 	}
 
 	/++
@@ -144,8 +170,18 @@ class TableBuilder
 	 ++/
 	TableBuilder addRule(NonTerminal lhs, int[] rhs)
 	{
-		// Create a production rule.
-		productions ~= Production(lhs, rhs);
+		// Fetch the production rule.
+		auto production = getWithLHS(lhs);
+
+		// Create it if necessary.
+		if(production is null)
+		{
+			production = new Production(lhs);
+			productions ~= production;
+		}
+
+		// Append the new rhs value.
+		production.rhs ~= rhs;
 
 		// Register tokens.
 		nonterminals ~= lhs;
@@ -189,22 +225,25 @@ class TableBuilder
 		// Compute PREDICT sets.
 		computePredictSets;
 
+		int rule = 1;
 		auto table = new ParseTable;
 
 		// Construct the parse table.
-		foreach(idx, production; productions)
+		foreach(production; productions)
 		{
-			int rule = idx + 1;
-			auto elements = predict(rule);
-
-			foreach(token; elements)
+			foreach(rhs; production.rhs)
 			{
-				// Build the parse table rules.
-				table[production.lhs, token] = rule;
-			}
+				auto elements = predict(rule);
 
-			// Include the rhs for the rule.
-			table[rule] = production.rhs;
+				foreach(token; elements)
+				{
+					// Build the parse table rules.
+					table[production.lhs, token] = rule;
+				}
+
+				// Include the rhs for the rule.
+				table[rule++] = rhs;
+			}
 		}
 
 		return table;
@@ -302,26 +341,10 @@ class TableBuilder
 		/++
 		 + Returns a list of production rules with the given lhs.
 		 ++/
-		Production[] getFromCache(NonTerminal lhs)
+		Production getWithLHS(NonTerminal lhs)
 		{
-			// Check for cached rules.
-			auto rules = lhs in productionCache;
-
-			if(rules is null)
-			{
-				// Filter matching rules.
-				auto matches = productions[]
-					.filter!(p => p.lhs == lhs)
-					.array;
-
-				// Cache the matching rules.
-				productionCache[lhs] = matches;
-				return matches;
-			}
-			else
-			{
-				return *rules;
-			}
+			auto result = productions[].filter!(p => p.lhs == lhs).array;
+			return result.length > 0 ? result[0] : null;
 		}
 
 		/++
@@ -329,11 +352,7 @@ class TableBuilder
 		 ++/
 		int[][] getAlphaSets(NonTerminal lhs)
 		{
-			return getFromCache(lhs)
-				.filter!(p => p.rhs[0] == lhs)
-				.filter!(p => p.rhs[1 .. $] != [epsilon])
-				.map!(p => p.rhs[1 .. $])
-				.array;
+			return getWithLHS(lhs).getAlphaSets();
 		}
 
 		/++
@@ -341,10 +360,7 @@ class TableBuilder
 		 ++/
 		int[][] getBetaSets(NonTerminal lhs)
 		{
-			return getFromCache(lhs)
-				.filter!(p => p.rhs[0] != lhs)
-				.map!(p => p.rhs)
-				.array;
+			return getWithLHS(lhs).getBetaSets();
 		}
 
 		/++
@@ -411,25 +427,15 @@ class TableBuilder
 						
 						// Expand ambiguous references to A in α.
 						alpha = expandAmbiguous(lhs, alpha, beta);
-
-						// Remove left recursive rules from grammar and cache.
-						productions = productions[].filter!(p => p.lhs != lhs).array;
-						productionCache.remove(lhs);
-
-						foreach(rhs; beta)
-						{
-							// A → β₁A' | β₂A' | ... | βₘA'
-							productions ~= Production(lhs, rhs ~ tail);
-						}
-
-						foreach(rhs; alpha)
-						{
-							// A' → α₁A' | α₂A' | ... | αₙA'
-							productions ~= Production(tail, rhs ~ tail);
-						}
 						
-						// A' → ε
-						productions ~= Production(tail, [epsilon]);
+						// A → β₁A' | β₂A' | ... | βₘA'
+						production.rhs = beta.map!(r => r ~ tail).array;
+
+						// Create a new production rule.
+						productions ~= new Production(
+							// A' → α₁A' | α₂A' | ... | αₙA' | ε
+							tail, alpha.map!(r => r ~ tail).array ~ [epsilon]
+						);
 
 						// Add tail to nonterminals.
 						nonterminals ~= tail;
@@ -440,12 +446,9 @@ class TableBuilder
 			}
 		}
 
-		int[][] getGammaSets(Production production)
+		int[][] getGammaSets(NonTerminal lhs, int leftmost)
 		{
-			return getFromCache(production.lhs)
-				.filter!(p => p.rhs[0] == production.rhs[0])
-				.map!(p => p.rhs)
-				.array;
+			return getWithLHS(lhs).getGammaSets(leftmost);
 		}
 
 		void removeFirstFirstConflicts()
@@ -455,34 +458,37 @@ class TableBuilder
 			{
 				changed = false;
 				
+				OUTER:
 				// A → αɣ₁ | αɣ₂ | ... | Aɣₙ
 				foreach(production; productions)
 				{
-					int[][] gamma = getGammaSets(production);
-
-					if(gamma.length > 1)
+					foreach(i, rhs; production.rhs)
 					{
-						// A' := max(A) + 1
-						int tail = nonterminals.reduce!max + 1;
+						int lhs = production.lhs;
+						int[][] gamma = getGammaSets(lhs, rhs[0]);
 
-						// Remove FIRST/FIRST conflicting rules from grammar and cache.
-						productions = productions[].filter!(p =>
-							 p.lhs != production.lhs || p.rhs[0] != production.rhs[0]).array;
-						productionCache.remove(production.lhs);
-
-						// A → αA'
-						productions ~= Production(production.lhs, [production.rhs[0], tail]);
-
-						foreach(rhs; gamma)
+						if(gamma.length > 1)
 						{
-							// A' → ɣ₁ | ɣ₂ | ... | ɣₙ
-							productions ~= Production(tail, rhs[1 .. $]);
+							// A' := max(A) + 1
+							int tail = nonterminals.reduce!max + 1;
+
+							// Remove FIRST/FIRST conflicting rules from grammar and cache.
+							production.rhs = production.rhs.filter!(r => r[0] != rhs[0]).array;
+							
+							// A → αA'
+							production.rhs ~= [rhs[0], tail];
+							
+							// Create a new production rule.
+							productions ~= new Production(
+								// A' → ɣ₁ | ɣ₂ | ... | ɣₙ
+								tail, gamma.map!(r => r[1 .. $]).array
+							);
+					
+							// Add tail to nonterminals.
+							nonterminals ~= tail;
+							changed = true;
+							break OUTER;
 						}
-						
-						// Add tail to nonterminals.
-						nonterminals ~= tail;
-						changed = true;
-						break;
 					}
 				}
 			}
@@ -512,41 +518,45 @@ class TableBuilder
 
 				foreach(production; productions)
 				{
-					int count = 0;
 					int X = production.lhs;
 
 					// Save the old value of the FIRST set.
 					auto initial = firstSets[X].dup;
 
-					// For each X → Y₁, Y₂, ..., Yₖ
-					foreach(i, Y; production.rhs)
+					foreach(rhs; production.rhs)
 					{
-						// If ε ∈ FIRST(Yᵢ)
-						if(epsilon in firstSets[Y])
-						{
-							count++;
-						}
+						int count = 0;
 
-						if(i == 0)
+						// X → Y₁, Y₂, ..., Yₖ
+						foreach(i, Y; rhs)
 						{
-							// FIRST(X) ∪ { FIRST(Yᵢ) - ε } 
-							firstSets[X] ~= firstSets[Y] - epsilon;
-						}
-						else
-						{
-							// If ε in FIRST(Yᵢ₋₁) when 1 < i ≤ k
-							if(epsilon in firstSets[production.rhs[i - 1]])
+							// If ε ∈ FIRST(Yᵢ)
+							if(epsilon in firstSets[Y])
 							{
-								// FIRST(X) ∪ { FIRST(Yᵢ) - ε }
+								count++;
+							}
+
+							if(i == 0)
+							{
+								// FIRST(X) ∪ { FIRST(Yᵢ) - ε } 
 								firstSets[X] ~= firstSets[Y] - epsilon;
 							}
+							else
+							{
+								// If ε in FIRST(Yᵢ₋₁) when 1 < i ≤ k
+								if(epsilon in firstSets[rhs[i - 1]])
+								{
+									// FIRST(X) ∪ { FIRST(Yᵢ) - ε }
+									firstSets[X] ~= firstSets[Y] - epsilon;
+								}
+							}
 						}
-					}
 
-					// If ε ∈ FIRST(Yᵢ) for 1 ≤ i ≤ k
-					if(count == production.rhs.length)
-					{
-						firstSets[X] ~= epsilon;
+						// If ε ∈ FIRST(Yᵢ) for 1 ≤ i ≤ k
+						if(count == rhs.length)
+						{
+							firstSets[X] ~= epsilon;
+						}
 					}
 
 					// Check if the FIRST set was changed.
@@ -575,23 +585,26 @@ class TableBuilder
 				{
 					int A = production.lhs;
 
-					foreach(i, B; production.rhs)
+					foreach(rhs; production.rhs)
 					{
-						if(B > epsilon)
+						foreach(i, B; rhs)
 						{
-							// Save the old value of the FOLLOW set.
-							auto initial = followSets[B].dup;
-
-							int[] beta = production.rhs[i + 1 .. $];
-
-							followSets[B] ~= first(beta) - epsilon;
-							if(beta.length == 0 || epsilon in first(beta))
+							if(B > epsilon)
 							{
-								followSets[B] ~= followSets[A];
-							}
+								// Save the old value of the FOLLOW set.
+								auto initial = followSets[B].dup;
+
+								int[] beta = rhs[i + 1 .. $];
+
+								followSets[B] ~= first(beta) - epsilon;
+								if(beta.length == 0 || epsilon in first(beta))
+								{
+									followSets[B] ~= followSets[A];
+								}
 							
-							// Check if the FOLLOW set was changed.
-							changed |= initial != followSets[B];
+								// Check if the FOLLOW set was changed.
+								changed |= initial != followSets[B];
+							}
 						}
 					}
 				}
@@ -603,17 +616,20 @@ class TableBuilder
 			int nextRule = 1;
 			foreach(production; productions)
 			{
-				int rule = nextRule++;
-				auto falpha = first(production.rhs);
-
-				// PREDICT(A → α) := FIRST(α)
-				predictSets[rule] = falpha - epsilon;
-
-				// If ε ∈ FIRST(α)
-				if(epsilon in falpha)
+				foreach(rhs; production.rhs)
 				{
-					// PREDICT(A → α) ∪ FOLLOW(A)
-					predictSets[rule] ~= follow(production.lhs);
+					int rule = nextRule++;
+					auto falpha = first(rhs);
+
+					// PREDICT(A → α) := FIRST(α)
+					predictSets[rule] = falpha - epsilon;
+
+					// If ε ∈ FIRST(α)
+					if(epsilon in falpha)
+					{
+						// PREDICT(A → α) ∪ FOLLOW(A)
+						predictSets[rule] ~= follow(production.lhs);
+					}
 				}
 			}
 		}
@@ -671,22 +687,18 @@ unittest
 
 	// Validate rules and ordering.
 	assert(builder.productions == [
-		builder.Production(A, [B, C, Ω]),
-		builder.Production(B, [b, B]),
-		builder.Production(B, [epsilon]),
-		builder.Production(C, [c]),
-		builder.Production(C, [epsilon])
+		new Production(A, [B, C, Ω]),
+		new Production(B, [b, B], [epsilon]),
+		new Production(C, [c], [epsilon])
 	]);
 
 	auto table = builder.build;
 
-	// Validate rule factoring and resolution.
+	// Validate rules and ordering.
 	assert(builder.productions == [
-		builder.Production(A, [B, C, Ω]),
-		builder.Production(B, [b, B]),
-		builder.Production(B, [epsilon]),
-		builder.Production(C, [c]),
-		builder.Production(C, [epsilon])
+		new Production(A, [B, C, Ω]),
+		new Production(B, [b, B], [epsilon]),
+		new Production(C, [c], [epsilon])
 	]);
 
 	// Validate FIRST sets.
@@ -763,19 +775,17 @@ unittest
 
 	// Validate rules and ordering.
 	assert(builder.productions == [
-		builder.Production(E, [E, Plus, E]),
-		builder.Production(E, [P]),
-		builder.Production(P, [One])
+		new Production(E, [E, Plus, E], [P]),
+		new Production(P, [One])
 	]);
 	
 	auto table = builder.build;
 
 	// Validate rules and ordering.
 	assert(builder.productions == [
-		builder.Production(P, [One]),
-		builder.Production(E, [P, F]),
-		builder.Production(F, [Plus, P, F]),
-		builder.Production(F, [epsilon])
+		new Production(E, [P, F]),
+		new Production(P, [One]),
+		new Production(F, [Plus, P, F], [epsilon])
 	]);
 
 	// Validate FIRST sets.
@@ -795,13 +805,13 @@ unittest
 	assert(builder.predict(4) == [eof]);
 
 	// Validate parse table.
-	assert(table[P, One] == 1);
-	assert(table[P, Plus] == 0);
-	assert(table[P, eof] == 0);
-
-	assert(table[E, One] == 2);
+	assert(table[E, One] == 1);
 	assert(table[E, Plus] == 0);
 	assert(table[E, eof] == 0);
+
+	assert(table[P, One] == 2);
+	assert(table[P, Plus] == 0);
+	assert(table[P, eof] == 0);
 
 	assert(table[F, One] == 0);
 	assert(table[F, Plus] == 3);
@@ -855,22 +865,18 @@ unittest
 
 	// Validate rules and ordering.
 	assert(builder.productions == [
-		builder.Production(E, [E, Plus, E]),
-		builder.Production(E, [E, Plus, Plus, E]),
-		builder.Production(E, [P]),
-		builder.Production(P, [One])
+		new Production(E, [E, Plus, E], [E, Plus, Plus, E], [P]),
+		new Production(P, [One])
 	]);
 	
 	auto table = builder.build;
 	
 	// Validate rules and ordering.
 	assert(builder.productions == [
-		builder.Production(P, [One]),
-		builder.Production(E, [P, F]),
-		builder.Production(F, [epsilon]),
-		builder.Production(F, [Plus, G]),
-		builder.Production(G, [P, F]),
-		builder.Production(G, [Plus, P, F])
+		new Production(E, [P, F]),
+		new Production(P, [One]),
+		new Production(F, [Plus, G], [epsilon]),
+		new Production(G, [P, F], [Plus, P, F])
 	]);
 
 	// Validate FIRST sets.

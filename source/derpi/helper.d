@@ -22,6 +22,45 @@ enum int epsilon = 0;
  ++/
 enum int eof = -1;
 
+class Stack(T)
+{
+
+	private T[] elements;
+
+	this()
+	{
+	}
+	
+	this(T[] elements...)
+	{
+		this.elements = elements;
+	}
+
+	@property
+	bool empty()
+	{
+		return elements.length == 0;
+	}
+
+	T top()
+	{
+		return elements[$ - 1];
+	}
+
+	T pop()
+	{
+		T old = elements[$ - 1];
+		elements = elements[1 .. $ - 1];
+		return old;
+	}
+
+	void push(T element)
+	{
+		elements ~= element;
+	}
+
+}
+
 /++
  + A type representing an ordered set of unique values.
  ++/
@@ -241,6 +280,19 @@ class OrderedSet(T)
 		foreach(element; elements[])
 		{
 			result = func(element);
+			if(result) break;
+		}
+
+		return result;
+	}
+
+	int opApply(int delegate(int, ref T) func)
+	{
+		int result = 0, idx = 0;
+
+		foreach(element; elements[])
+		{
+			result = func(idx++, element);
 			if(result) break;
 		}
 
