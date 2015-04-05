@@ -41,6 +41,7 @@ enum Terminal eof = -1;
  ++/
 class Stack(T)
 {
+	import std.array;
 
 	/++
 	 + The list of elements on the stack.
@@ -76,7 +77,7 @@ class Stack(T)
 	 ++/
 	T top()
 	{
-		return elements[$ - 1];
+		return elements.back;
 	}
 
 	/++
@@ -84,8 +85,8 @@ class Stack(T)
 	 ++/
 	T pop()
 	{
-		T old = elements[$ - 1];
-		elements = elements[1 .. $ - 1];
+		T old = elements.back;
+		elements.popBack;
 		return old;
 	}
 
