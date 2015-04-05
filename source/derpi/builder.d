@@ -122,6 +122,16 @@ class TableBuilder
 	{
 
 		/++
+		 + The eof token defined by the grammar.
+		 ++/
+		Terminal eofToken = eof;
+
+		/++
+		 + The starting rule for the grammar.
+		 ++/
+		NonTerminal startRule = start;
+
+		/++
 		 + The set of terminals in the grammar.
 		 ++/
 		OrderedSet!Terminal terminals;
@@ -163,6 +173,24 @@ class TableBuilder
 		terminals = new OrderedSet!Terminal;
 		nonterminals = new OrderedSet!NonTerminal;
 		productions = new OrderedSet!Production;
+	}
+
+	/++
+	 + Sets the EOF terminal for the grammar.
+	 ++/
+	TableBuilder setEOFToken(Terminal eofToken)
+	{
+		this.eofToken = eofToken;
+		return this;
+	}
+
+	/++
+	 + Sets the starting rule, for the grammar.
+	 ++/
+	TableBuilder setStartRule(NonTerminal startRule)
+	{
+		this.startRule = startRule;
+		return this;
 	}
 
 	/++
@@ -574,7 +602,7 @@ class TableBuilder
 			}
 
 			// FOLLOW(S) := EOF
-			followSets[start] = new OrderedSet!Terminal(eof);
+			followSets[startRule] = new OrderedSet!Terminal(eofToken);
 
 			// Loop until equilibrium.
 			for(bool changed = true; changed;)
