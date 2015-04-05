@@ -18,7 +18,7 @@ class Production
 	/++
 	 + The right hand side of the rule.
 	 ++/
-	int[][] rhs;
+	Token[][] rhs;
 
 	/++
 	 + Contructs a new production rule.
@@ -26,7 +26,7 @@ class Production
 	 + Params:
 	 +     lhs = The left hand side of the rule.
 	 ++/
-	this(NonTerminal lhs, int[][] rhs = []...)
+	this(NonTerminal lhs, Token[][] rhs = []...)
 	{
 		this.lhs = lhs;
 		this.rhs = rhs;
@@ -43,7 +43,7 @@ class Production
 	/++
 	 + Returns the alpha fragments of left recursive rules in this production set.
 	 ++/
-	int[][] getAlphaSets()
+	Token[][] getAlphaSets()
 	{
 		if(isLeftRecursive)
 		{
@@ -63,7 +63,7 @@ class Production
 	/++
 	 + Returns the beta fragments of non left recursive rules in this production set.
 	 ++/
-	int[][] getBetaSets()
+	Token[][] getBetaSets()
 	{
 		if(isLeftRecursive)
 		{
@@ -80,7 +80,7 @@ class Production
 	/++
 	 + Returns the gamma fragments of FIRST/FIRST colliding rules in this production set.
 	 ++/
-	int[][] getGammaSets(int leftmost)
+	Token[][] getGammaSets(Token leftmost)
 	{
 		return rhs
 			.filter!(r => r[0] == leftmost)
@@ -141,17 +141,17 @@ class TableBuilder
 		/++
 		 + The computed FIRST sets for the grammar.
 		 ++/
-		OrderedSet!Terminal[int] firstSets;
+		OrderedSet!Terminal[NonTerminal] firstSets;
 
 		/++
 		 + The computed FOLLOW sets for the grammar.
 		 ++/
-		OrderedSet!Terminal[int] followSets;
+		OrderedSet!Terminal[NonTerminal] followSets;
 
 		/++
 		 + The computed PREDICT sets for the grammar.
 		 ++/
-		OrderedSet!Terminal[int] predictSets;
+		OrderedSet!Terminal[Rule] predictSets;
 
 	}
 
@@ -168,7 +168,7 @@ class TableBuilder
 	/++
 	 + Adds a production rule to the grammar.
 	 ++/
-	TableBuilder addRule(NonTerminal lhs, int[] rhs)
+	TableBuilder addRule(NonTerminal lhs, Token[] rhs)
 	{
 		// Fetch the production rule.
 		auto production = getWithLHS(lhs);
@@ -225,7 +225,7 @@ class TableBuilder
 		// Compute PREDICT sets.
 		computePredictSets;
 
-		int rule = 1;
+		Rule rule = 1;
 		auto table = new ParseTable;
 
 		// Construct the parse table.
@@ -266,7 +266,7 @@ class TableBuilder
 		OrderedSet!Terminal first(NonTerminal[] alpha...)
 		{
 			int count = 0;
-			auto sets = new OrderedSet!int;
+			auto sets = new OrderedSet!Terminal;
 
 			// For each α → X₁, X₂, ..., Xₖ
 			foreach(i, X; alpha)
@@ -350,7 +350,7 @@ class TableBuilder
 		/++
 		 + Returns a list of non-empty left-recursive rules.
 		 ++/
-		int[][] getAlphaSets(NonTerminal lhs)
+		Token[][] getAlphaSets(NonTerminal lhs)
 		{
 			return getWithLHS(lhs).getAlphaSets();
 		}
@@ -358,7 +358,7 @@ class TableBuilder
 		/++
 		 + Returns a list of non-left-recursive rules.
 		 ++/
-		int[][] getBetaSets(NonTerminal lhs)
+		Token[][] getBetaSets(NonTerminal lhs)
 		{
 			return getWithLHS(lhs).getBetaSets();
 		}
@@ -366,9 +366,9 @@ class TableBuilder
 		/++
 		 + Replaces ambiguous references to A in α with β.
 		 ++/
-		int[][] expandAmbiguous(NonTerminal lhs, int[][] alpha, int[][] beta)
+		Token[][] expandAmbiguous(NonTerminal lhs, Token[][] alpha, Token[][] beta)
 		{
-			int[][] result;
+			Token[][] result;
 
 			// α → α₁, α₂, ..., αₙ
 			foreach(alphaRule; alpha)
@@ -379,7 +379,7 @@ class TableBuilder
 					// β → β₁, β₂, ..., βₘ
 					foreach(betaRule; beta)
 					{
-						int[] rhs;
+						Token[] rhs;
 
 						// Substitute A with β.
 						foreach(token; alphaRule)
@@ -414,16 +414,16 @@ class TableBuilder
 					// A → Aα₁ | ... | Aαₙ | β₁ | ... | βₘ
 					if(production.isLeftRecursive)
 					{
-						int lhs = production.lhs;
+						NonTerminal lhs = production.lhs;
 
 						// A' := max(A) + 1
-						int tail = nonterminals.reduce!max + 1;
+						NonTerminal tail = nonterminals.reduce!max + 1;
 					
 						// α → α₁, α₂, ..., αₙ
-						int[][] alpha = getAlphaSets(lhs);
+						Token[][] alpha = getAlphaSets(lhs);
 					
 						// β → β₁, β₂, ..., βₘ
-						int[][] beta = getBetaSets(lhs);
+						Token[][] beta = getBetaSets(lhs);
 						
 						// Expand ambiguous references to A in α.
 						alpha = expandAmbiguous(lhs, alpha, beta);
@@ -446,7 +446,7 @@ class TableBuilder
 			}
 		}
 
-		int[][] getGammaSets(NonTerminal lhs, int leftmost)
+		Token[][] getGammaSets(NonTerminal lhs, Token leftmost)
 		{
 			return getWithLHS(lhs).getGammaSets(leftmost);
 		}
@@ -464,13 +464,13 @@ class TableBuilder
 				{
 					foreach(i, rhs; production.rhs)
 					{
-						int lhs = production.lhs;
-						int[][] gamma = getGammaSets(lhs, rhs[0]);
+						NonTerminal lhs = production.lhs;
+						Token[][] gamma = getGammaSets(lhs, rhs[0]);
 
 						if(gamma.length > 1)
 						{
 							// A' := max(A) + 1
-							int tail = nonterminals.reduce!max + 1;
+							NonTerminal tail = nonterminals.reduce!max + 1;
 
 							// Remove FIRST/FIRST conflicting rules from grammar and cache.
 							production.rhs = production.rhs.filter!(r => r[0] != rhs[0]).array;
@@ -518,7 +518,7 @@ class TableBuilder
 
 				foreach(production; productions)
 				{
-					int X = production.lhs;
+					NonTerminal X = production.lhs;
 
 					// Save the old value of the FIRST set.
 					auto initial = firstSets[X].dup;
@@ -570,11 +570,11 @@ class TableBuilder
 			// FOLLOWS(...) := { }
 			foreach(n; nonterminals)
 			{
-				followSets[n] = new OrderedSet!int;
+				followSets[n] = new OrderedSet!Terminal;
 			}
 
 			// FOLLOW(S) := EOF
-			followSets[start] = new OrderedSet!int(eof);
+			followSets[start] = new OrderedSet!Terminal(eof);
 
 			// Loop until equilibrium.
 			for(bool changed = true; changed;)
@@ -583,7 +583,7 @@ class TableBuilder
 
 				foreach(production; productions)
 				{
-					int A = production.lhs;
+					NonTerminal A = production.lhs;
 
 					foreach(rhs; production.rhs)
 					{
@@ -594,7 +594,7 @@ class TableBuilder
 								// Save the old value of the FOLLOW set.
 								auto initial = followSets[B].dup;
 
-								int[] beta = rhs[i + 1 .. $];
+								Token[] beta = rhs[i + 1 .. $];
 
 								followSets[B] ~= first(beta) - epsilon;
 								if(beta.length == 0 || epsilon in first(beta))
@@ -613,12 +613,12 @@ class TableBuilder
 		
 		void computePredictSets()
 		{
-			int nextRule = 1;
+			Rule nextRule = 1;
 			foreach(production; productions)
 			{
 				foreach(rhs; production.rhs)
 				{
-					int rule = nextRule++;
+					Rule rule = nextRule++;
 					auto falpha = first(rhs);
 
 					// PREDICT(A → α) := FIRST(α)
@@ -655,7 +655,7 @@ unittest
 	/++
 	 + Define grammar tokens.
 	 ++/
-	enum : int
+	enum : Token
 	{
 
 		// Terminals
@@ -746,7 +746,7 @@ unittest
 	/++
 	 + Define grammar tokens.
 	 ++/
-	enum : int
+	enum : Token
 	{
 
 		// Terminals
@@ -834,7 +834,7 @@ unittest
 	/++
 	 + Define grammar tokens.
 	 ++/
-	enum : int
+	enum : Token
 	{
 
 		// Terminals

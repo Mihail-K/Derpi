@@ -1,26 +1,40 @@
 
 module derpi.helper;
 
+/++
+ + Type alias for parser rules.
+ ++/
 alias Rule = int;
 
+/++
+ + Type alias for terminals and nonterminals.
+ ++/
+alias Token = int;
+
+/++
+ + Type alias for terminals.
+ ++/
 alias Terminal = int;
 
+/++
+ + Type alias for nonterminals.
+ ++/
 alias NonTerminal = int;
 
 /++
  + Constant start.
  ++/
-enum int start = 1;
+enum NonTerminal start = 1;
 
 /++
  + Constant epsilon.
  ++/
-enum int epsilon = 0;
+enum Token epsilon = 0;
 
 /++
  + Constant eof.
  ++/
-enum int eof = -1;
+enum Terminal eof = -1;
 
 /++
  + A simple implementation of the LIFO data type.
