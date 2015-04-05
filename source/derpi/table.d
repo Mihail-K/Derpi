@@ -11,11 +11,11 @@ class ParseTable
 
 		Rule[Terminal][NonTerminal] table;
 
-		int[][Rule] rhs;
+		Token[][Rule] rhs;
 	
 	}
 
-	int[] opIndex(Rule rule)
+	Token[] opIndex(Rule rule)
 	{
 		return rhs[rule];
 	}
@@ -32,11 +32,11 @@ class ParseTable
 		}
 		else
 		{
-			return epsilon;
+			return 0; // Error
 		}
 	}
 
-	void opIndexAssign(int[] rhs, Rule rule)
+	void opIndexAssign(Token[] rhs, Rule rule)
 	in
 	{
 		assert(rule !in this.rhs);
