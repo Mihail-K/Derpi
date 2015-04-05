@@ -37,6 +37,9 @@ class Production
 	 ++/
 	bool isLeftRecursive()
 	{
+		// REQUIRED : DMD 2.067 CTFE delegate bug.
+		NonTerminal lhs = this.lhs;
+
 		return rhs.filter!(r => r[0] == lhs).any;
 	}
 
@@ -47,6 +50,9 @@ class Production
 	{
 		if(isLeftRecursive)
 		{
+			// REQUIRED : DMD 2.067 CTFE delegate bug.
+			NonTerminal lhs = this.lhs;
+
 			return rhs
 				.filter!(r => r[0] == lhs)
 				.filter!(r => r != [epsilon])
@@ -67,12 +73,16 @@ class Production
 	{
 		if(isLeftRecursive)
 		{
+			// REQUIRED : DMD 2.067 CTFE delegate bug.
+			NonTerminal lhs = this.lhs;
+
 			return rhs
 				.filter!(r => r[0] != lhs)
 				.array;
 		}
 		else
 		{
+			// No beta sets.
 			return [[]];
 		}
 	}
@@ -257,13 +267,13 @@ class TableBuilder
 		auto table = new ParseTable;
 
 		// Construct the parse table.
-		foreach(production; productions)
+		foreach(production; productions[])
 		{
 			foreach(rhs; production.rhs)
 			{
 				auto elements = predict(rule);
 
-				foreach(token; elements)
+				foreach(token; elements[])
 				{
 					// Build the parse table rules.
 					table[production.lhs, token] = rule;
@@ -437,7 +447,7 @@ class TableBuilder
 			{
 				changed = false;
 
-				foreach(production; productions)
+				foreach(production; productions[])
 				{
 					// A → Aα₁ | ... | Aαₙ | β₁ | ... | βₘ
 					if(production.isLeftRecursive)
@@ -445,7 +455,7 @@ class TableBuilder
 						NonTerminal lhs = production.lhs;
 
 						// A' := max(A) + 1
-						NonTerminal tail = nonterminals.reduce!max + 1;
+						NonTerminal tail = nonterminals[].reduce!max + 1;
 					
 						// α → α₁, α₂, ..., αₙ
 						Token[][] alpha = getAlphaSets(lhs);
@@ -488,7 +498,7 @@ class TableBuilder
 				
 				OUTER:
 				// A → αɣ₁ | αɣ₂ | ... | Aɣₙ
-				foreach(production; productions)
+				foreach(production; productions[])
 				{
 					foreach(i, rhs; production.rhs)
 					{
@@ -498,7 +508,7 @@ class TableBuilder
 						if(gamma.length > 1)
 						{
 							// A' := max(A) + 1
-							NonTerminal tail = nonterminals.reduce!max + 1;
+							NonTerminal tail = nonterminals[].reduce!max + 1;
 
 							// Remove FIRST/FIRST conflicting rules from grammar and cache.
 							production.rhs = production.rhs.filter!(r => r[0] != rhs[0]).array;
@@ -525,7 +535,7 @@ class TableBuilder
 		void computeFirstSets()
 		{
 			// Build sets of terminals.
-			foreach(t; terminals)
+			foreach(t; terminals[])
 			{
 				firstSets[t] = new OrderedSet!Terminal(t);
 			}
@@ -534,7 +544,7 @@ class TableBuilder
 			firstSets[epsilon] = new OrderedSet!Terminal(epsilon);
 
 			// Initialize sets of nonterminals.
-			foreach(n; nonterminals)
+			foreach(n; nonterminals[])
 			{
 				firstSets[n] = new OrderedSet!Terminal;
 			}
@@ -544,7 +554,7 @@ class TableBuilder
 			{
 				changed = false;
 
-				foreach(production; productions)
+				foreach(production; productions[])
 				{
 					NonTerminal X = production.lhs;
 
@@ -596,7 +606,7 @@ class TableBuilder
 		void computeFollowSets()
 		{
 			// FOLLOWS(...) := { }
-			foreach(n; nonterminals)
+			foreach(n; nonterminals[])
 			{
 				followSets[n] = new OrderedSet!Terminal;
 			}
@@ -609,7 +619,7 @@ class TableBuilder
 			{
 				changed = false;
 
-				foreach(production; productions)
+				foreach(production; productions[])
 				{
 					NonTerminal A = production.lhs;
 
@@ -642,7 +652,7 @@ class TableBuilder
 		void computePredictSets()
 		{
 			Rule nextRule = 1;
-			foreach(production; productions)
+			foreach(production; productions[])
 			{
 				foreach(rhs; production.rhs)
 				{
@@ -846,7 +856,6 @@ unittest
 	assert(table[F, eof] == 4);
 }
 
-
 /+
  + Grammar 3:
  +
@@ -943,4 +952,103 @@ unittest
 	assert(table[G, One] == 5);
 	assert(table[G, Plus] == 6);
 	assert(table[G, eof] == 0);
+}
+
+/+
+ + CTFE Test,
+ + Grammar 2:
+ +
+ + E → E + E
+ +   | P
+ +
+ + P → 1
+ +
+ +/
+unittest
+{
+	/++
+	 + Define grammar tokens.
+	 ++/
+	enum : Token
+	{
+
+		// Terminals
+
+		One = -3,
+		Plus = -2,
+
+		// Non Terminals
+
+		E = 1,
+		P = 2,
+		F = 3
+
+	}
+
+	/++
+	 + CTFE helper function.
+	 ++/
+	bool testBuilder()
+	{
+		auto builder = new TableBuilder;
+
+		builder
+			.addRule(E, [E, Plus, E])
+			.addRule(E, [P])
+			.addRule(P, [One]);
+
+		// Validate token sets.
+		assert(builder.terminals == [One, Plus]);
+		assert(builder.nonterminals == [E, P]);
+
+		// Validate rules and ordering.
+		assert(builder.productions == [
+			new Production(E, [E, Plus, E], [P]),
+			new Production(P, [One])
+		]);
+	
+		auto table = builder.build;
+
+		// Validate rules and ordering.
+		assert(builder.productions == [
+			new Production(E, [P, F]),
+			new Production(P, [One]),
+			new Production(F, [Plus, P, F], [epsilon])
+		]);
+
+		// Validate FIRST sets.
+		assert(builder.first(P) == [One]);
+		assert(builder.first(E) == [One]);
+		assert(builder.first(F) == [Plus, epsilon]);
+
+		// Validate FOLLOW sets.
+		assert(builder.follow(P) == [Plus, eof]);
+		assert(builder.follow(E) == [eof]);
+		assert(builder.follow(F) == [eof]);
+
+		// Validate PREDICT sets.
+		assert(builder.predict(1) == [One]);
+		assert(builder.predict(2) == [One]);
+		assert(builder.predict(3) == [Plus]);
+		assert(builder.predict(4) == [eof]);
+
+		// Validate parse table.
+		assert(table[E, One] == 1);
+		assert(table[E, Plus] == 0);
+		assert(table[E, eof] == 0);
+
+		assert(table[P, One] == 2);
+		assert(table[P, Plus] == 0);
+		assert(table[P, eof] == 0);
+
+		assert(table[F, One] == 0);
+		assert(table[F, Plus] == 3);
+		assert(table[F, eof] == 4);
+
+		return true;
+	}
+
+	// Compile time test.
+	static assert(testBuilder);
+
 }

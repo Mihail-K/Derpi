@@ -311,32 +311,6 @@ class OrderedSet(T)
 		return set;
 	}
 
-	int opApply(int delegate(ref T) func)
-	{
-		int result = 0;
-
-		foreach(element; elements[])
-		{
-			result = func(element);
-			if(result) break;
-		}
-
-		return result;
-	}
-
-	int opApply(int delegate(int, ref T) func)
-	{
-		int result = 0, idx = 0;
-
-		foreach(element; elements[])
-		{
-			result = func(idx++, element);
-			if(result) break;
-		}
-
-		return result;
-	}
-
 	/++
 	 + Compares two sets for equality.
 	 ++/
@@ -598,32 +572,6 @@ class UnorderedSet(T)
 		}
 
 		return set;
-	}
-
-	int opApply(int delegate(ref T) func)
-	{
-		int result = 0;
-
-		foreach(element; elements)
-		{
-			result = func(element);
-			if(result) break;
-		}
-
-		return result;
-	}
-
-	int opApply(int delegate(int, ref T) func)
-	{
-		int result = 0;
-
-		foreach(idx, element; elements)
-		{
-			result = func(idx, element);
-			if(result) break;
-		}
-
-		return result;
 	}
 
 	/++
