@@ -22,31 +22,52 @@ enum int epsilon = 0;
  ++/
 enum int eof = -1;
 
+/++
+ + A simple implementation of the LIFO data type.
+ ++/
 class Stack(T)
 {
 
+	/++
+	 + The list of elements on the stack.
+	 ++/
 	private T[] elements;
 
+	/++
+	 + Constructs a new empty stack.
+	 ++/
 	this()
 	{
 	}
 	
+	/++
+	 + Constructs a new stack with an initial set of elements.
+	 ++/
 	this(T[] elements...)
 	{
 		this.elements = elements;
 	}
 
+	/++
+	 + Tests whether the stack is empty.
+	 ++/
 	@property
 	bool empty()
 	{
 		return elements.length == 0;
 	}
 
+	/++
+	 + Returns the top element on the stack.
+	 ++/
 	T top()
 	{
 		return elements[$ - 1];
 	}
 
+	/++
+	 + Pops an element off the stack.
+	 ++/
 	T pop()
 	{
 		T old = elements[$ - 1];
@@ -54,6 +75,9 @@ class Stack(T)
 		return old;
 	}
 
+	/++
+	 + Pushes an element onto the stack.
+	 ++/
 	void push(T element)
 	{
 		elements ~= element;
