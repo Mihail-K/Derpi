@@ -898,4 +898,21 @@ unittest
 	assert(builder.predict(4) == [Plus]);
 	assert(builder.predict(5) == [One]);
 	assert(builder.predict(6) == [Plus]);
+
+	// Validate parse table.
+	assert(table[E, One] == 1);
+	assert(table[E, Plus] == 0);
+	assert(table[E, eof] == 0);
+
+	assert(table[P, One] == 2);
+	assert(table[P, Plus] == 0);
+	assert(table[P, eof] == 0);
+
+	assert(table[F, One] == 0);
+	assert(table[F, Plus] == 4);
+	assert(table[F, eof] == 3);
+
+	assert(table[G, One] == 5);
+	assert(table[G, Plus] == 6);
+	assert(table[G, eof] == 0);
 }
