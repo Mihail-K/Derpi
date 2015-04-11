@@ -167,6 +167,11 @@ class TableBuilder
 		 ++/
 		OrderedSet!Production productions;
 
+		/++
+		 + The table of transformations applied to the grammar.
+		 ++/
+		NonTerminal[][NonTerminal] transformations;
+
 		
 		/++
 		 + The computed FIRST sets for the grammar.
@@ -420,6 +425,29 @@ class TableBuilder
 
 	private
 	{
+
+		void addTransformation(NonTerminal initial, NonTerminal tail)
+		in
+		{
+			assert(initial in nonterminals);
+			assert(tail !in nonterminals);
+		}
+		body
+		{
+			// Create the new nonterminal.
+			nonterminalNames[tail] = nonterminalNames[initial] ~ "Prime";
+			nonterminals ~= tail;
+
+			// Add the transformation.
+			if(initial in transformations)
+			{
+				transformations[initial] ~= tail;
+			}
+			else
+			{
+				transformations[initial] = [tail];
+			}
+		}
 	
 		/++
 		 + Returns a list of production rules with the given lhs.
@@ -521,8 +549,7 @@ class TableBuilder
 						);
 
 						// Add tail to nonterminals.
-						nonterminalNames[tail] = nonterminalNames[lhs] ~ "Prime";
-						nonterminals ~= tail;
+						addTransformation(lhs, tail);
 
 						changed = true;
 						break;
@@ -571,7 +598,8 @@ class TableBuilder
 							);
 					
 							// Add tail to nonterminals.
-							nonterminals ~= tail;
+							addTransformation(lhs, tail);
+
 							changed = true;
 							break OUTER;
 						}
