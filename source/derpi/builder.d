@@ -21,10 +21,11 @@ class Production
 	Token[][] rhs;
 
 	/++
-	 + Contructs a new production rule.
+	 + Contructs a new production ruleset.
 	 +
 	 + Params:
-	 +     lhs = The left hand side of the rule.
+	 +     lhs = The left hand side of the rules.
+	 +     rhs = The right hand sides of the rules.
 	 ++/
 	this(NonTerminal lhs, Token[][] rhs = []...)
 	{
@@ -97,6 +98,9 @@ class Production
 			.array;
 	}
 
+	/++
+	 + Compares this production set to another.
+	 ++/
 	override int opCmp(Object o)
 	{
 		// Compare lhs values.
@@ -105,7 +109,7 @@ class Production
 	}
 
 	/++
-	 + Tests for equality against another rule.
+	 + Tests for equality against another production set.
 	 ++/
 	override bool opEquals(Object o)
 	{
@@ -125,7 +129,7 @@ class Production
 
 }
 
-class TableBuilder
+class GrammarBuilder
 {
 
 	private
@@ -170,7 +174,7 @@ class TableBuilder
 		/++
 		 + The table of transformations applied to the grammar.
 		 ++/
-		NonTerminal[][NonTerminal] transformations;
+		NonTerminal[NonTerminal] transformations;
 
 		
 		/++
@@ -191,7 +195,7 @@ class TableBuilder
 	}
 
 	/++
-	 + Constructs an empty parse table builder.
+	 + Constructs an empty grammar builder.
 	 ++/
 	this()
 	{
@@ -203,7 +207,7 @@ class TableBuilder
 	/++
 	 + Sets the EOF terminal for the grammar.
 	 ++/
-	TableBuilder setEOFToken(Terminal eofToken)
+	GrammarBuilder setEOFToken(Terminal eofToken)
 	{
 		this.eofToken = eofToken;
 		return this;
@@ -212,7 +216,7 @@ class TableBuilder
 	/++
 	 + Sets the starting rule, for the grammar.
 	 ++/
-	TableBuilder setStartRule(NonTerminal startRule)
+	GrammarBuilder setStartRule(NonTerminal startRule)
 	{
 		this.startRule = startRule;
 		return this;
@@ -221,7 +225,7 @@ class TableBuilder
 	/++
 	 + Adds a terminal to the grammar.
 	 ++/
-	TableBuilder addTerminal(string name, Terminal t)
+	GrammarBuilder addTerminal(string name, Terminal t)
 	in
 	{
 		assert(t !in terminals);
@@ -236,7 +240,7 @@ class TableBuilder
 	/++
 	 + Adds a nonterminal to the grammar.
 	 ++/
-	TableBuilder addNonTerminal(string name, NonTerminal n)
+	GrammarBuilder addNonTerminal(string name, NonTerminal n)
 	in
 	{
 		assert(n !in nonterminals);
@@ -251,7 +255,7 @@ class TableBuilder
 	/++
 	 + Adds a production rule to the grammar.
 	 ++/
-	TableBuilder addRule(NonTerminal lhs, Token[] rhs)
+	GrammarBuilder addRule(NonTerminal lhs, Token[] rhs)
 	{
 		// Fetch the production rule.
 		auto production = getProduction(lhs);
@@ -426,6 +430,9 @@ class TableBuilder
 	private
 	{
 
+		/++
+		 + Records a transformation, and creates the new nonterminal.
+		 ++/
 		void addTransformation(NonTerminal initial, NonTerminal tail)
 		in
 		{
@@ -436,17 +443,8 @@ class TableBuilder
 		{
 			// Create the new nonterminal.
 			nonterminalNames[tail] = nonterminalNames[initial] ~ "Prime";
+			transformations[tail] = initial;
 			nonterminals ~= tail;
-
-			// Add the transformation.
-			if(initial in transformations)
-			{
-				transformations[initial] ~= tail;
-			}
-			else
-			{
-				transformations[initial] = [tail];
-			}
 		}
 	
 		/++
@@ -558,6 +556,9 @@ class TableBuilder
 			}
 		}
 
+		/++
+		 + Returns a list of rules that needs to be factored.
+		 ++/
 		Token[][] getGammaSets(NonTerminal lhs, Token leftmost)
 		{
 			return getProduction(lhs).getGammaSets(leftmost);
@@ -750,6 +751,208 @@ class TableBuilder
 
 	}
 
+	private
+	{
+
+		import std.array;
+		import std.string;
+
+		/++
+		 + Represents a tree node, produced by the grammar.
+		 ++/
+		struct TreeNode
+		{
+
+			/++
+			 + The name of this tree node.
+			 ++/
+			string name;
+
+			/++
+			 + The table of fields for the tree node.
+			 ++/
+			TreeNodeField[string] fields;
+
+			/++
+			 + Produces the source for this tree node.
+			 ++/
+			string toString()
+			{
+				auto buffer = appender!string;
+
+				// Generate the class declaration.
+				buffer ~= format("class %s : TreeNode", name);
+				buffer ~= "{";
+
+				// Build the field list.
+				foreach(field; fields)
+				{
+					buffer ~= field.toString ~ ";";
+				}
+
+				// Close the declaration.
+				buffer ~= "}";
+
+				return buffer.data;
+			}
+
+		}
+
+		/++
+		 + Represents a field in a tree node.
+		 ++/
+		struct TreeNodeField
+		{
+
+			/++
+			 + The name of the field.
+			 ++/
+			string name;
+
+			/++
+			 + The type of the field.
+			 ++/
+			string type;
+
+			/++
+			 + The number of values stored in the field.
+			 ++/
+			int count;
+
+			/++
+			 + Produces the source for this field.
+			 ++/
+			string toString()
+			{
+				string buffer = type ~ " " ~ name;
+				if(count > 1) buffer ~= "[]";
+				return buffer;
+			}
+
+		}
+
+		/++
+		 + Returns the tree node for a given production.
+		 ++/
+		TreeNode createTreeNode(Production production)
+		{
+			string name = nonterminalNames[production.lhs];
+			auto fields = createNodeFields(production);
+			return TreeNode(name ~ "Node", fields);
+		}
+
+		/++
+		 + Returns a list of fields appear in a production's tree node.
+		 ++/
+		TreeNodeField[string] createNodeFields(Production production)
+		{
+			TreeNodeField[string] fields;
+			
+			// Create node field list.
+			foreach(token, count; getUsageMax(production))
+			{
+				// Check if this is part of a transformation.
+				if(token > epsilon && token in transformations)
+				{
+					// Ensure the transformation corresponds to this node.
+					if(transformations[token] == production.lhs)
+					{
+						auto child = getProduction(token);
+
+						// Merge transformation back into parent.
+						foreach(name, field; createNodeFields(child))
+						{
+							if(name in fields)
+							{
+								// Merge into and existing field.
+								fields[name].count += field.count;
+							}
+							else
+							{
+								// Copy the field over.
+								fields[name] = field;
+							}
+						}
+					}
+				}
+				else
+				{
+					string name, type;
+
+					// Check for terminal.
+					if(token < epsilon)
+					{
+						name = terminalNames[token];
+						type = "TerminalNode";
+					}
+					// Check for nonterminal.
+					else if(token > epsilon)
+					{
+						name = nonterminalNames[token];
+						type = name ~ "Node";
+					}
+					// Skip epsilon.
+					else
+					{
+						continue;
+					}
+
+					if(name in fields)
+					{
+						// Merge into an existing field.
+						fields[name].count += count;
+					}
+					else
+					{
+						// Create a new tree node field.
+						fields[name] = TreeNodeField(name, type, count);
+					}
+				}
+			}
+
+			return fields;
+		}
+
+		int[Token] getUsageMax(Production production)
+		{
+			int[Token] total;
+
+			foreach(rhs; production.rhs)
+			{
+				int[Token] local;
+
+				// Calculate local maximums.
+				foreach(token; rhs)
+				{
+					if(token in local)
+					{
+						local[token]++;
+					}
+					else
+					{
+						local[token] = 1;
+					}
+				}
+
+				// Merge result into global maximums.
+				foreach(token, count; local)
+				{
+					if(token in total)
+					{
+						total[token] = max(total[token], count);
+					}
+					else
+					{
+						total[token] = count;
+					}
+				}
+			}
+
+			return total;
+		}
+
+	}
+
 }
 
 /+
@@ -786,7 +989,7 @@ unittest
 
 	}
 
-	auto builder = new TableBuilder;
+	auto builder = new GrammarBuilder;
 
 	builder
 		// Terminals
@@ -887,7 +1090,7 @@ unittest
 
 	}
 
-	auto builder = new TableBuilder;
+	auto builder = new GrammarBuilder;
 
 	builder
 		// Terminals
@@ -984,7 +1187,7 @@ unittest
 
 	}
 
-	auto builder = new TableBuilder;
+	auto builder = new GrammarBuilder;
 
 	builder
 		// Terminals
@@ -1095,7 +1298,7 @@ unittest
 	 ++/
 	bool testBuilder()
 	{
-		auto builder = new TableBuilder;
+		auto builder = new GrammarBuilder;
 
 		builder
 			// Terminals

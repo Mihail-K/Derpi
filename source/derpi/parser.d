@@ -125,7 +125,7 @@ unittest
 
 	}
 
-	auto builder = new TableBuilder;
+	auto builder = new GrammarBuilder;
 
 	builder
 		// Terminals
