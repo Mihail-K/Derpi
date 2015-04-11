@@ -20,6 +20,9 @@ class Production
 	 ++/
 	Token[][] rhs;
 
+	/++
+	 + A table mapping rule ids to rhs indexes.
+	 ++/
 	Rule[int] rule;
 
 	/++
@@ -300,6 +303,12 @@ class GrammarBuilder
 		}
 
 		return this;
+	}
+
+	string build()
+	{
+		// TODO
+		return buildParser;
 	}
 
 	private
@@ -984,6 +993,10 @@ class GrammarBuilder
 			buffer ~= "class SomeParser : Parser";
 			buffer ~= "{";
 
+			// Include a constructor.
+			buffer ~= "this(ParserToken[] tokens)";
+			buffer ~= "{ super(tokens); }";
+
 			auto table = buildParseTable;
 			foreach(production; productions[])
 			{
@@ -1013,7 +1026,7 @@ class GrammarBuilder
 				foreach(element; predict(rule)[])
 				{
 					// Check against the predicted element.
-					buffer ~= format("if(current.type == %d)", element);
+					buffer ~= format("if(match(%d))", element);
 					buffer ~= "{";
 
 					// Generate rule body.
@@ -1022,8 +1035,8 @@ class GrammarBuilder
 						// Check for nonterminal.
 						if(token > epsilon)
 						{
-							name = nonterminalNames[token];
-							buffer ~= format("%s();", name);
+							string func = nonterminalNames[token];
+							buffer ~= format("%s();", func);
 						}
 						// Check for terminal.
 						else if(token < epsilon)
@@ -1044,7 +1057,7 @@ class GrammarBuilder
 			}
 
 			// Rule failed to match.
-			buffer ~= "assert(0);";
+			buffer ~= format("assert(0, \"%s\");", name);
 
 			// Close the declaration.
 			buffer ~= "}";

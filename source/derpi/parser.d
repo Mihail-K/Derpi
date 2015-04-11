@@ -87,9 +87,19 @@ abstract class Parser
 			current = input.front;
 			input.removeFront;
 		}
+		else
+		{
+			last = current;
+			current = null;
+		}
+	}
 
-		last = current;
-		current = null;
+	/++
+	 + Tries to match the current token.
+	 ++/
+	bool match(Terminal t)
+	{
+		return current && current.type == t;
 	}
 
 	/++
@@ -97,7 +107,7 @@ abstract class Parser
 	 ++/
 	bool accept(Terminal t)
 	{
-		if(current && current.type == t)
+		if(match(t))
 		{
 			advance;
 			return true;
@@ -115,6 +125,97 @@ abstract class Parser
 		{
 			assert(0);
 		}
+	}
+
+}
+
+/+
+ + Grammar 4:
+ +
+ + E → E + E
+ +   | E - E
+ +   | P
+ +
+ + P → 1
+ +   | 2
+ +
+ +/
+unittest
+{
+	/++
+	 + Define grammar tokens.
+	 ++/
+	enum : Token
+	{
+
+		// Terminals
+
+		Two = -5,
+		One = -4,
+		Minus = -3,
+		Plus = -2,
+
+		// Non Terminals
+
+		E = 1,
+		P = 2,
+		F = 3,
+		G = 4
+
+	}
+
+	/++
+	 + CTFE helper function.
+	 ++/
+	string createParser()
+	{
+		import derpi.builder;
+		auto builder = new GrammarBuilder;
+
+		builder
+			// Terminals
+			.addTerminal("One", One)
+			.addTerminal("Two", Two)
+			.addTerminal("Plus", Plus)
+			.addTerminal("Minus", Minus)
+
+			// Nonterminals
+			.addNonTerminal("E", E)
+			.addNonTerminal("P", P)
+
+			// Productions
+			.addRule(E, [E, Plus, E])
+			.addRule(E, [E, Minus, E])
+			.addRule(E, [P])
+			.addRule(P, [One])
+			.addRule(P, [Two]);
+
+		return builder.build;
+	}
+
+	// Include the parser.
+	mixin(createParser);
+
+	// Create and initialize the parser.
+	// - Input : 1 + 2 - 1 <EOF>
+	auto parser = new SomeParser([
+		new ParserToken(One, "1"),
+		new ParserToken(Plus, "+"),
+		new ParserToken(Two, "2"),
+		new ParserToken(Minus, "-"),
+		new ParserToken(One, "1"),
+		new ParserToken(eof, "$")
+	]);
+
+	try
+	{
+		// Parse input!
+		parser.E;
+	}
+	catch(Throwable t)
+	{
+		// Parsing failed.
+		assert(0, t.toString);
 	}
 
 }
