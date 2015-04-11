@@ -151,6 +151,16 @@ class TableBuilder
 		 ++/
 		OrderedSet!NonTerminal nonterminals;
 
+		/++
+		 + The table of names of terminals.
+		 ++/
+		string[Terminal] terminalNames;
+
+		/++
+		 + The table of names of nonterminals.
+		 ++/
+		string[NonTerminal] nonterminalNames;
+
 
 		/++
 		 + The set of production rules in the grammar.
@@ -204,12 +214,42 @@ class TableBuilder
 	}
 
 	/++
+	 + Adds a terminal to the grammar.
+	 ++/
+	TableBuilder addTerminal(string name, Terminal t)
+	in
+	{
+		assert(t !in terminals);
+	}
+	body
+	{
+		terminalNames[t] = name;
+		terminals ~= t;
+		return this;
+	}
+
+	/++
+	 + Adds a nonterminal to the grammar.
+	 ++/
+	TableBuilder addNonTerminal(string name, NonTerminal n)
+	in
+	{
+		assert(n !in nonterminals);
+	}
+	body
+	{
+		nonterminalNames[n] = name;
+		nonterminals ~= n;
+		return this;
+	}
+
+	/++
 	 + Adds a production rule to the grammar.
 	 ++/
 	TableBuilder addRule(NonTerminal lhs, Token[] rhs)
 	{
 		// Fetch the production rule.
-		auto production = getWithLHS(lhs);
+		auto production = getProduction(lhs);
 
 		// Create it if necessary.
 		if(production is null)
@@ -221,19 +261,24 @@ class TableBuilder
 		// Append the new rhs value.
 		production.rhs ~= rhs;
 
-		// Register tokens.
-		nonterminals ~= lhs;
-		foreach(token; rhs)
+		// Validate tokens.
+		foreach(token; lhs ~ rhs)
 		{
 			// Check for terminal.
 			if(token < epsilon)
 			{
-				terminals ~= token;
+				if(token !in terminals)
+				{
+					assert(0);
+				}
 			}
 			// Check for nonterminal.
 			else if(token > epsilon)
 			{
-				nonterminals ~= token;
+				if(token !in nonterminals)
+				{
+					assert(0);
+				}
 			}
 		}
 
@@ -379,7 +424,7 @@ class TableBuilder
 		/++
 		 + Returns a list of production rules with the given lhs.
 		 ++/
-		Production getWithLHS(NonTerminal lhs)
+		Production getProduction(NonTerminal lhs)
 		{
 			auto result = productions[].filter!(p => p.lhs == lhs).array;
 			return result.length > 0 ? result[0] : null;
@@ -390,7 +435,7 @@ class TableBuilder
 		 ++/
 		Token[][] getAlphaSets(NonTerminal lhs)
 		{
-			return getWithLHS(lhs).getAlphaSets();
+			return getProduction(lhs).getAlphaSets();
 		}
 
 		/++
@@ -398,7 +443,7 @@ class TableBuilder
 		 ++/
 		Token[][] getBetaSets(NonTerminal lhs)
 		{
-			return getWithLHS(lhs).getBetaSets();
+			return getProduction(lhs).getBetaSets();
 		}
 
 		/++
@@ -476,7 +521,9 @@ class TableBuilder
 						);
 
 						// Add tail to nonterminals.
+						nonterminalNames[tail] = nonterminalNames[lhs] ~ "Prime";
 						nonterminals ~= tail;
+
 						changed = true;
 						break;
 					}
@@ -486,7 +533,7 @@ class TableBuilder
 
 		Token[][] getGammaSets(NonTerminal lhs, Token leftmost)
 		{
-			return getWithLHS(lhs).getGammaSets(leftmost);
+			return getProduction(lhs).getGammaSets(leftmost);
 		}
 
 		void removeFirstFirstConflicts()
@@ -510,8 +557,9 @@ class TableBuilder
 							// A' := max(A) + 1
 							NonTerminal tail = nonterminals[].reduce!max + 1;
 
-							// Remove FIRST/FIRST conflicting rules from grammar and cache.
-							production.rhs = production.rhs.filter!(r => r[0] != rhs[0]).array;
+							// Remove FIRST/FIRST conflicting rules from grammar.
+							production.rhs = production.rhs
+									.filter!(r => r[0] != rhs[0]).array;
 							
 							// A → αA'
 							production.rhs ~= [rhs[0], tail];
@@ -713,6 +761,17 @@ unittest
 	auto builder = new TableBuilder;
 
 	builder
+		// Terminals
+		.addTerminal("c", c)
+		.addTerminal("b", b)
+		.addTerminal("Ω", Ω)
+
+		// Nonterminals
+		.addNonTerminal("A", A)
+		.addNonTerminal("B", B)
+		.addNonTerminal("C", C)
+
+		// Productions
 		.addRule(A, [B, C, Ω])
 		.addRule(B, [b, B])
 		.addRule(B, [epsilon])
@@ -803,6 +862,15 @@ unittest
 	auto builder = new TableBuilder;
 
 	builder
+		// Terminals
+		.addTerminal("One", One)
+		.addTerminal("Plus", Plus)
+
+		// Nonterminals
+		.addNonTerminal("E", E)
+		.addNonTerminal("P", P)
+
+		// Productions
 		.addRule(E, [E, Plus, E])
 		.addRule(E, [P])
 		.addRule(P, [One]);
@@ -891,6 +959,15 @@ unittest
 	auto builder = new TableBuilder;
 
 	builder
+		// Terminals
+		.addTerminal("One", One)
+		.addTerminal("Plus", Plus)
+
+		// Nonterminals
+		.addNonTerminal("E", E)
+		.addNonTerminal("P", P)
+
+		// Productions
 		.addRule(E, [E, Plus, E])
 		.addRule(E, [E, Plus, Plus, E])
 		.addRule(E, [P])
@@ -993,6 +1070,15 @@ unittest
 		auto builder = new TableBuilder;
 
 		builder
+			// Terminals
+			.addTerminal("One", One)
+			.addTerminal("Plus", Plus)
+
+			// Nonterminals
+			.addNonTerminal("E", E)
+			.addNonTerminal("P", P)
+
+			// Productions
 			.addRule(E, [E, Plus, E])
 			.addRule(E, [P])
 			.addRule(P, [One]);

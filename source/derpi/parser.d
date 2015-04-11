@@ -128,6 +128,15 @@ unittest
 	auto builder = new TableBuilder;
 
 	builder
+		// Terminals
+		.addTerminal("One", One)
+		.addTerminal("Plus", Plus)
+
+		// Nonterminals
+		.addNonTerminal("E", E)
+		.addNonTerminal("P", P)
+
+		// Productions
 		.addRule(E, [E, Plus, E])
 		.addRule(E, [P])
 		.addRule(P, [One]);
