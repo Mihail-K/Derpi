@@ -1,156 +1,120 @@
 
 module derpi.parser;
 
+import std.container;
+
 import derpi.table;
 import derpi.helper;
 
-class Parser
+/++
+ + Represents a token consumed by the parser.
+ ++/
+class ParserToken
 {
 
-	import std.container;
+	/++
+	 + The terminal matched by the token.
+	 ++/
+	Terminal type;
 
-	private
+	/++
+	 + The string repsented by the token.
+	 ++/
+	string text;
+
+	/++
+	 + Constructs a new parser token.
+	 ++/
+	this(Terminal type, string text)
 	{
-
-		/++
-		 + The computed LL parse table.
-		 ++/
-		ParseTable table;
-
-		/++
-		 + The parser state stack.
-		 ++/
-		Stack!Token stack;
-
-		/++
-		 + The parser token input queue.
-		 ++/
-		DList!Token input;
-
+		this.type = type;
+		this.text = text;
 	}
 
 	/++
-	 + Constructs a new parser with the given parse table.
+	 + Returns a string representation of this token.
 	 ++/
-	this(ParseTable table)
+	override string toString()
 	{
-		this.table = table;
-	}
-
-	/++
-	 + Parses an input string of tokens.
-	 +
-	 + Returns:
-	 +     The list of parser rule that were matched.
-	 ++/
-	Rule[] parse(Token[] tokens)
-	{
-		Rule[] output;
-		
-		stack = new Stack!Token;
-		input = DList!Token(tokens);
-
-		// Prepare stack.
-		stack.push(eof);
-		stack.push(start);
-
-		while(!stack.empty)
-		{
-			if(stack.top > epsilon)
-			{
-				// Look up parser rule.
-				Rule rule = table[stack.pop, input.front];
-
-				// Push rule RHS to stack.
-				import std.range : retro;
-				foreach(token; table[rule].retro)
-				{
-					stack.push(token);
-				}
-
-				// Save rule.
-				output ~= rule;
-			}
-			else if(stack.top == input.front)
-			{
-				// Match input token.
-				input.removeFront;
-				stack.pop;
-			}
-			else if(stack.top == epsilon)
-			{
-				// Match nothing.
-				stack.pop;
-			}
-			else
-			{
-				assert(0, "Syntax error.");
-			}
-		}
-
-		return output;
+		import std.conv : text;
+		return "[" ~ type.text ~ ": " ~ this.text ~ "]";
 	}
 
 }
 
-/+
- + Grammar 2:
- +
- + E → E + E
- +   | P
- +
- + P → 1
- +
- +/
-unittest
+abstract class Parser
 {
-	import derpi.builder;
 
-	/++
-	 + Define grammar tokens.
-	 ++/
-	enum : Token
+	protected
 	{
 
-		// Terminals
+		/++
+		 + The input queue of parser tokens.
+		 ++/
+		DList!ParserToken input;
 
-		One = -3,
-		Plus = -2,
+		/++
+		 + The next token to consume.
+		 ++/
+		ParserToken current;
 
-		// Non Terminals
-
-		E = 1,
-		P = 2,
-		F = 3
+		/++
+		 + The last token consumed.
+		 ++/
+		ParserToken last;
 
 	}
 
-	auto builder = new GrammarBuilder;
+	/++
+	 + Constructs a new parser from a list of tokens.
+	 ++/
+	this(ParserToken[] tokens)
+	{
+		input = DList!ParserToken(tokens);
 
-	builder
-		// Terminals
-		.addTerminal("One", One)
-		.addTerminal("Plus", Plus)
+		// Advance to initial token.
+		advance;
+	}
 
-		// Nonterminals
-		.addNonTerminal("E", E)
-		.addNonTerminal("P", P)
+	/++
+	 + Consumes a token from the input queue, advancing the parser.
+	 ++/
+	void advance()
+	{
+		if(!input.empty)
+		{
+			last = current;
+			current = input.front;
+			input.removeFront;
+		}
 
-		// Productions
-		.addRule(E, [E, Plus, E])
-		.addRule(E, [P])
-		.addRule(P, [One]);
+		last = current;
+		current = null;
+	}
 
-	auto table = builder.build;
-	auto parser = new Parser(table);
+	/++
+	 + Tries to match the current token, advancing on success.
+	 ++/
+	bool accept(Terminal t)
+	{
+		if(current && current.type == t)
+		{
+			advance;
+			return true;
+		}
 
-	// Parse input: 1 + 1 + 1 $
-	auto output = parser.parse(
-		[One, Plus, One, Plus, One, eof]
-	);
+		return false;
+	}
 
-	// Validate parser output.
-	assert(output == [
-		1, 2, 3, 2, 3, 2, 4
-	]);
+	/++
+	 + Tries to match the current token, throwing an error on failure.
+	 ++/
+	void expect(Terminal t)
+	{
+		if(!accept(t))
+		{
+			assert(0);
+		}
+	}
+
 }
