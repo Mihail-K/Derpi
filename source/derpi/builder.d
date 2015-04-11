@@ -20,6 +20,8 @@ class Production
 	 ++/
 	Token[][] rhs;
 
+	Rule[int] rule;
+
 	/++
 	 + Contructs a new production ruleset.
 	 +
@@ -192,6 +194,12 @@ class GrammarBuilder
 		 ++/
 		OrderedSet!Terminal[Rule] predictSets;
 
+
+		/++
+		 + A cached reference to the constructed parse table.
+		 ++/
+		ParseTable parseTable;
+
 	}
 
 	/++
@@ -292,53 +300,6 @@ class GrammarBuilder
 		}
 
 		return this;
-	}
-
-	/++
-	 + Constructs a parse table based on the input grammar.
-	 +
-	 + Returns:
-	 +     The constructed parse table.
-	 ++/
-	ParseTable build()
-	{
-		// Remove left recursion.
-		removeLeftRecursion;
-
-		// Remove FIRST/FIRST conflicts.
-		removeFirstFirstConflicts;
-
-		// Compute FIRST sets.
-		computeFirstSets;
-
-		// Compute FOLLOW sets.
-		computeFollowSets;
-
-		// Compute PREDICT sets.
-		computePredictSets;
-
-		Rule rule = 1;
-		auto table = new ParseTable;
-
-		// Construct the parse table.
-		foreach(production; productions[])
-		{
-			foreach(rhs; production.rhs)
-			{
-				auto elements = predict(rule);
-
-				foreach(token; elements[])
-				{
-					// Build the parse table rules.
-					table[production.lhs, token] = rule;
-				}
-
-				// Include the rhs for the rule.
-				table[rule++] = rhs;
-			}
-		}
-
-		return table;
 	}
 
 	private
@@ -753,6 +714,62 @@ class GrammarBuilder
 
 	private
 	{
+		
+		/++
+		 + Constructs a parse table based on the input grammar.
+		 +
+		 + Returns:
+		 +     The constructed parse table.
+		 ++/
+		ParseTable buildParseTable()
+		{
+			if(parseTable is null)
+			{
+				// Remove left recursion.
+				removeLeftRecursion;
+
+				// Remove FIRST/FIRST conflicts.
+				removeFirstFirstConflicts;
+
+				// Compute FIRST sets.
+				computeFirstSets;
+
+				// Compute FOLLOW sets.
+				computeFollowSets;
+
+				// Compute PREDICT sets.
+				computePredictSets;
+
+				Rule rule = 1;
+				parseTable = new ParseTable;
+
+				// Construct the parse table.
+				foreach(production; productions[])
+				{
+					foreach(idx, rhs; production.rhs)
+					{
+						auto elements = predict(rule);
+
+						foreach(token; elements[])
+						{
+							// Build the parse table rules.
+							parseTable[production.lhs, token] = rule;
+						}
+
+						// Include the rhs for the rule.
+						production.rule[idx] = rule;
+						parseTable[rule++] = rhs;
+					}
+				}
+			}
+			
+			return parseTable;
+		}
+
+	}
+
+	private
+	{
 
 		import std.array;
 		import std.string;
@@ -834,17 +851,17 @@ class GrammarBuilder
 		/++
 		 + Returns the tree node for a given production.
 		 ++/
-		TreeNode createTreeNode(Production production)
+		TreeNode buildTreeNode(Production production)
 		{
 			string name = nonterminalNames[production.lhs];
-			auto fields = createNodeFields(production);
+			auto fields = buildNodeFields(production);
 			return TreeNode(name ~ "Node", fields);
 		}
 
 		/++
 		 + Returns a list of fields appear in a production's tree node.
 		 ++/
-		TreeNodeField[string] createNodeFields(Production production)
+		TreeNodeField[string] buildNodeFields(Production production)
 		{
 			TreeNodeField[string] fields;
 			
@@ -860,7 +877,7 @@ class GrammarBuilder
 						auto child = getProduction(token);
 
 						// Merge transformation back into parent.
-						foreach(name, field; createNodeFields(child))
+						foreach(name, field; buildNodeFields(child))
 						{
 							if(name in fields)
 							{
@@ -953,6 +970,90 @@ class GrammarBuilder
 
 	}
 
+	private
+	{
+
+		import std.array;
+		import std.string;
+
+		string buildParser()
+		{
+			auto buffer = appender!string;
+
+			// TODO : Parser name.
+			buffer ~= "class SomeParser : Parser";
+			buffer ~= "{";
+
+			auto table = buildParseTable;
+			foreach(production; productions[])
+			{
+				buffer ~= buildParserRule(table, production);
+			}
+
+			// Close the declaration.
+			buffer ~= "}";
+
+			return buffer.data;
+		}
+
+		string buildParserRule(ParseTable table, Production production)
+		{
+			auto buffer = appender!string;
+
+			// Generate the function declaration.
+			string name = nonterminalNames[production.lhs];
+			buffer ~= format("void %s()", name);
+			buffer ~= "{";
+
+			// Build parser rule body.
+			foreach(idx, rhs; production.rhs)
+			{
+				// Fetch rule and predict set.
+				Rule rule = production.rule[idx];
+				foreach(element; predict(rule)[])
+				{
+					// Check against the predicted element.
+					buffer ~= format("if(current.type == %d)", element);
+					buffer ~= "{";
+
+					// Generate rule body.
+					foreach(token; rhs)
+					{
+						// Check for nonterminal.
+						if(token > epsilon)
+						{
+							name = nonterminalNames[token];
+							buffer ~= format("%s();", name);
+						}
+						// Check for terminal.
+						else if(token < epsilon)
+						{
+							buffer ~= format("expect(%d);", token);
+						}
+						// Epsilon.
+						else
+						{
+							buffer ~= "/* epsilon */";
+						}
+					}
+
+					// Close the rule body.
+					buffer ~= "return;";
+					buffer ~= "}";
+				}
+			}
+
+			// Rule failed to match.
+			buffer ~= "assert(0);";
+
+			// Close the declaration.
+			buffer ~= "}";
+
+			return buffer.data;
+		}
+
+	}
+
 }
 
 /+
@@ -1020,7 +1121,7 @@ unittest
 		new Production(C, [c], [epsilon])
 	]);
 
-	auto table = builder.build;
+	auto table = builder.buildParseTable;
 
 	// Validate rules and ordering.
 	assert(builder.productions == [
@@ -1116,7 +1217,7 @@ unittest
 		new Production(P, [One])
 	]);
 	
-	auto table = builder.build;
+	auto table = builder.buildParseTable;
 
 	// Validate rules and ordering.
 	assert(builder.productions == [
@@ -1214,7 +1315,7 @@ unittest
 		new Production(P, [One])
 	]);
 	
-	auto table = builder.build;
+	auto table = builder.buildParseTable;
 	
 	// Validate rules and ordering.
 	assert(builder.productions == [
@@ -1260,6 +1361,76 @@ unittest
 	assert(table[G, One] == 5);
 	assert(table[G, Plus] == 6);
 	assert(table[G, eof] == 0);
+}
+
+/+
+ + Grammar 4:
+ +
+ + E → E + E
+ +   | E - E
+ +   | P
+ +
+ + P → 1
+ +   | 2
+ +
+ +/
+unittest
+{
+	/++
+	 + Define grammar tokens.
+	 ++/
+	enum : Token
+	{
+
+		// Terminals
+
+		Two = -5,
+		One = -4,
+		Minus = -3,
+		Plus = -2,
+
+		// Non Terminals
+
+		E = 1,
+		P = 2,
+		F = 3,
+		G = 4
+
+	}
+
+	auto builder = new GrammarBuilder;
+
+	builder
+		// Terminals
+		.addTerminal("One", One)
+		.addTerminal("Two", Two)
+		.addTerminal("Plus", Plus)
+		.addTerminal("Minus", Minus)
+
+		// Nonterminals
+		.addNonTerminal("E", E)
+		.addNonTerminal("P", P)
+
+		// Productions
+		.addRule(E, [E, Plus, E])
+		.addRule(E, [E, Minus, E])
+		.addRule(E, [P])
+		.addRule(P, [One])
+		.addRule(P, [Two]);
+
+	// Validate token sets.
+	assert(builder.terminals[] == [Two, One, Minus, Plus]);
+	assert(builder.nonterminals[] == [E, P]);
+
+	// Validate rules and ordering.
+	assert(builder.productions[] == [
+		new Production(E, [E, Plus, E], [E, Minus, E], [P]),
+		new Production(P, [One], [Two])
+	]);
+
+	auto table = builder.buildParseTable;
+
+	// TODO
 }
 
 /+
@@ -1324,7 +1495,7 @@ unittest
 			new Production(P, [One])
 		]);
 	
-		auto table = builder.build;
+		auto table = builder.buildParseTable;
 
 		// Validate rules and ordering.
 		assert(builder.productions == [
