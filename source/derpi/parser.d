@@ -158,9 +158,7 @@ unittest
 		// Non Terminals
 
 		E = 1,
-		P = 2,
-		F = 3,
-		G = 4
+		P = 2
 
 	}
 
@@ -170,7 +168,7 @@ unittest
 	string createParser()
 	{
 		import derpi.builder;
-		auto builder = new GrammarBuilder;
+		auto builder = new GrammarBuilder("Grammar4");
 
 		builder
 			// Terminals
@@ -198,7 +196,7 @@ unittest
 
 	// Create and initialize the parser.
 	// - Input : 1 + 2 - 1 <EOF>
-	auto parser = new SomeParser([
+	auto parser = new Grammar4Parser([
 		new ParserToken(One, "1"),
 		new ParserToken(Plus, "+"),
 		new ParserToken(Two, "2"),

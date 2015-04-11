@@ -141,6 +141,12 @@ class GrammarBuilder
 	{
 
 		/++
+		 + The name of the grammar produced.
+		 ++/
+		string name;
+
+
+		/++
 		 + The eof token defined by the grammar.
 		 ++/
 		Terminal eofToken = eof;
@@ -208,8 +214,9 @@ class GrammarBuilder
 	/++
 	 + Constructs an empty grammar builder.
 	 ++/
-	this()
+	this(string name)
 	{
+		this.name = name;
 		terminals = new OrderedSet!Terminal;
 		nonterminals = new OrderedSet!NonTerminal;
 		productions = new OrderedSet!Production;
@@ -989,8 +996,8 @@ class GrammarBuilder
 		{
 			auto buffer = appender!string;
 
-			// TODO : Parser name.
-			buffer ~= "class SomeParser : Parser";
+			// Generate the parser declaration.
+			buffer ~= format("class %sParser : Parser", name);
 			buffer ~= "{";
 
 			// Include a constructor.
@@ -1103,7 +1110,7 @@ unittest
 
 	}
 
-	auto builder = new GrammarBuilder;
+	auto builder = new GrammarBuilder("Grammar1");
 
 	builder
 		// Terminals
@@ -1204,7 +1211,7 @@ unittest
 
 	}
 
-	auto builder = new GrammarBuilder;
+	auto builder = new GrammarBuilder("Grammar2");
 
 	builder
 		// Terminals
@@ -1301,7 +1308,7 @@ unittest
 
 	}
 
-	auto builder = new GrammarBuilder;
+	auto builder = new GrammarBuilder("Grammar3");
 
 	builder
 		// Terminals
@@ -1411,7 +1418,7 @@ unittest
 
 	}
 
-	auto builder = new GrammarBuilder;
+	auto builder = new GrammarBuilder("Grammar4");
 
 	builder
 		// Terminals
@@ -1482,7 +1489,7 @@ unittest
 	 ++/
 	bool testBuilder()
 	{
-		auto builder = new GrammarBuilder;
+		auto builder = new GrammarBuilder("Grammar2");
 
 		builder
 			// Terminals
