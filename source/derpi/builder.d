@@ -62,6 +62,7 @@ class Production
 			return rhs
 				.filter!(r => r[0] == lhs)
 				.filter!(r => r != [epsilon])
+				.filter!(r => r.length > 1)
 				.map!(r => r[1 .. $])
 				.array;
 		}
@@ -83,6 +84,7 @@ class Production
 			NonTerminal lhs = this.lhs;
 
 			return rhs
+				.filter!(r => r.length > 0)
 				.filter!(r => r[0] != lhs)
 				.array;
 		}
@@ -99,6 +101,7 @@ class Production
 	Token[][] getGammaSets(Token leftmost)
 	{
 		return rhs
+			.filter!(r => r.length > 0)
 			.filter!(r => r[0] == leftmost)
 			.array;
 	}
@@ -500,32 +503,25 @@ class GrammarBuilder
 					// A → Aα₁ | ... | Aαₙ | β₁ | ... | βₘ
 					if(production.isLeftRecursive)
 					{
+						Token[][] result;
 						NonTerminal lhs = production.lhs;
-
-						// A' := max(A) + 1
-						NonTerminal tail = nonterminals[].reduce!max + 1;
-					
-						// α → α₁, α₂, ..., αₙ
-						Token[][] alpha = getAlphaSets(lhs);
-					
+						
 						// β → β₁, β₂, ..., βₘ
-						Token[][] beta = getBetaSets(lhs);
-						
-						// Expand ambiguous references to A in α.
-						alpha = expandAmbiguous(lhs, alpha, beta);
-						
-						// A → β₁A' | β₂A' | ... | βₘA'
-						production.rhs = beta.map!(r => r ~ tail).array;
+						foreach(b; getBetaSets(lhs))
+						{
+							// α → α₁, α₂, ..., αₙ
+							foreach(a; getAlphaSets(lhs))
+							{
+								// A → β₁α₁, β₁α₂, ..., βₘαₙ
+								result ~= b ~ a;
+							}
 
-						// Create a new production rule.
-						productions ~= new Production(
-							// A' → α₁A' | α₂A' | ... | αₙA' | ε
-							tail, alpha.map!(r => r ~ tail).array ~ [epsilon]
-						);
+							// A → ... | β₁, β₂, ..., βₘ
+							result ~= b;
+						}
 
-						// Add tail to nonterminals.
-						addTransformation(lhs, tail);
-
+						// Update the rule's rhs.
+						production.rhs = result;
 						changed = true;
 						break;
 					}
@@ -548,7 +544,6 @@ class GrammarBuilder
 			{
 				changed = false;
 				
-				OUTER:
 				// A → αɣ₁ | αɣ₂ | ... | Aɣₙ
 				foreach(production; productions[])
 				{
@@ -556,12 +551,12 @@ class GrammarBuilder
 					{
 						NonTerminal lhs = production.lhs;
 						Token[][] gamma = getGammaSets(lhs, rhs[0]);
-
+						
 						if(gamma.length > 1)
 						{
 							// A' := max(A) + 1
 							NonTerminal tail = nonterminals[].reduce!max + 1;
-
+							
 							// Remove FIRST/FIRST conflicting rules from grammar.
 							production.rhs = production.rhs
 									.filter!(r => r[0] != rhs[0]).array;
@@ -572,16 +567,20 @@ class GrammarBuilder
 							// Create a new production rule.
 							productions ~= new Production(
 								// A' → ɣ₁ | ɣ₂ | ... | ɣₙ
-								tail, gamma.map!(r => r[1 .. $]).array
+								tail, gamma.map!(r =>
+									r.length > 1 ? r[1 .. $] : [epsilon]).array
 							);
 					
 							// Add tail to nonterminals.
 							addTransformation(lhs, tail);
-
+							
 							changed = true;
-							break OUTER;
+							break;
 						}
 					}
+
+					// Restart after changes.
+					if(changed) break;
 				}
 			}
 		}
@@ -746,7 +745,7 @@ class GrammarBuilder
 
 				// Remove FIRST/FIRST conflicts.
 				removeFirstFirstConflicts;
-
+				
 				// Compute FIRST sets.
 				computeFirstSets;
 
@@ -790,160 +789,35 @@ class GrammarBuilder
 		import std.array;
 		import std.string;
 
-		/++
-		 + Represents a tree node, produced by the grammar.
-		 ++/
-		struct TreeNode
+		string buildParserTypes()
 		{
+			auto buffer = appender!string;
 
-			/++
-			 + The name of this tree node.
-			 ++/
-			string name;
-
-			/++
-			 + The table of fields for the tree node.
-			 ++/
-			TreeNodeField[string] fields;
-
-			/++
-			 + Produces the source for this tree node.
-			 ++/
-			string toString()
+			// Build tree node types.
+			foreach(production; productions[])
 			{
-				auto buffer = appender!string;
-
-				// Generate the class declaration.
-				buffer ~= format("class %s : TreeNode", name);
-				buffer ~= "{";
-
-				// Build the field list.
-				foreach(field; fields)
-				{
-					buffer ~= field.toString ~ ";";
-				}
-
-				// Close the declaration.
-				buffer ~= "}";
-
-				return buffer.data;
+				buffer ~= buildParserType(production);
 			}
 
+			return buffer.data;
 		}
 
-		/++
-		 + Represents a field in a tree node.
-		 ++/
-		struct TreeNodeField
+		string buildParserType(Production production)
 		{
+			auto buffer = appender!string;
 
-			/++
-			 + The name of the field.
-			 ++/
-			string name;
-
-			/++
-			 + The type of the field.
-			 ++/
-			string type;
-
-			/++
-			 + The number of values stored in the field.
-			 ++/
-			int count;
-
-			/++
-			 + Produces the source for this field.
-			 ++/
-			string toString()
-			{
-				string buffer = type ~ " " ~ name;
-				if(count > 1) buffer ~= "[]";
-				return buffer;
-			}
-
-		}
-
-		/++
-		 + Returns the tree node for a given production.
-		 ++/
-		TreeNode buildTreeNode(Production production)
-		{
+			// Generate tree node delcaration.
 			string name = nonterminalNames[production.lhs];
-			auto fields = buildNodeFields(production);
-			return TreeNode(name ~ "Node", fields);
-		}
+			buffer ~= format("class %sNode : TreeNode", name);
+			buffer ~= "{";
 
-		/++
-		 + Returns a list of fields appear in a production's tree node.
-		 ++/
-		TreeNodeField[string] buildNodeFields(Production production)
-		{
-			TreeNodeField[string] fields;
-			
-			// Create node field list.
-			foreach(token, count; getUsageMax(production))
-			{
-				// Check if this is part of a transformation.
-				if(token > epsilon && token in transformations)
-				{
-					// Ensure the transformation corresponds to this node.
-					if(transformations[token] == production.lhs)
-					{
-						auto child = getProduction(token);
+			// TODO : Implement body.
+			buffer ~= "override void build() { }";
 
-						// Merge transformation back into parent.
-						foreach(name, field; buildNodeFields(child))
-						{
-							if(name in fields)
-							{
-								// Merge into and existing field.
-								fields[name].count += field.count;
-							}
-							else
-							{
-								// Copy the field over.
-								fields[name] = field;
-							}
-						}
-					}
-				}
-				else
-				{
-					string name, type;
+			// Close node declaration.
+			buffer ~= "}";
 
-					// Check for terminal.
-					if(token < epsilon)
-					{
-						name = terminalNames[token];
-						type = "TerminalNode";
-					}
-					// Check for nonterminal.
-					else if(token > epsilon)
-					{
-						name = nonterminalNames[token];
-						type = name ~ "Node";
-					}
-					// Skip epsilon.
-					else
-					{
-						continue;
-					}
-
-					if(name in fields)
-					{
-						// Merge into an existing field.
-						fields[name].count += count;
-					}
-					else
-					{
-						// Create a new tree node field.
-						fields[name] = TreeNodeField(name, type, count);
-					}
-				}
-			}
-
-			return fields;
+			return buffer.data;
 		}
 
 		int[Token] getUsageMax(Production production)
@@ -995,16 +869,19 @@ class GrammarBuilder
 		string buildParser()
 		{
 			auto buffer = appender!string;
+			auto table = buildParseTable;
 
 			// Generate the parser declaration.
 			buffer ~= format("class %sParser : Parser", name);
 			buffer ~= "{";
 
+			// Include tree node types.
+			buffer ~= buildParserTypes;
+
 			// Include a constructor.
 			buffer ~= "this(ParserToken[] tokens)";
 			buffer ~= "{ super(tokens); }";
 
-			auto table = buildParseTable;
 			foreach(production; productions[])
 			{
 				buffer ~= buildParserRule(table, production);
@@ -1022,8 +899,11 @@ class GrammarBuilder
 
 			// Generate the function declaration.
 			string name = nonterminalNames[production.lhs];
-			buffer ~= format("void %s()", name);
+			buffer ~= format("TreeNode %s()", name);
 			buffer ~= "{";
+
+			// Declare and initialize the tree node.
+			buffer ~= format("auto node = new %sNode;", name);
 
 			// Build parser rule body.
 			foreach(idx, rhs; production.rhs)
@@ -1043,12 +923,15 @@ class GrammarBuilder
 						if(token > epsilon)
 						{
 							string func = nonterminalNames[token];
-							buffer ~= format("%s();", func);
+							buffer ~= format(`writeln("%s");`, func);
+							buffer ~= format("node.children ~= %s();", func);
 						}
 						// Check for terminal.
 						else if(token < epsilon)
 						{
 							buffer ~= format("expect(%d);", token);
+							buffer ~= format(`writeln("%d");`, token);
+							buffer ~= "node.children ~= new TerminalNode(last.text);";
 						}
 						// Epsilon.
 						else
@@ -1058,13 +941,14 @@ class GrammarBuilder
 					}
 
 					// Close the rule body.
-					buffer ~= "return;";
+					buffer ~= "return node;";
 					buffer ~= "}";
 				}
 			}
 
 			// Rule failed to match.
-			buffer ~= format("assert(0, \"%s\");", name);
+			buffer ~= "import std.conv : text;";
+			buffer ~= format(`assert(0, "%s" ~ current.type.text);`, name);
 
 			// Close the declaration.
 			buffer ~= "}";
@@ -1131,11 +1015,11 @@ unittest
 		.addRule(C, [epsilon]);
 
 	// Validate token sets.
-	assert(builder.terminals == [c, b, Ω]);
-	assert(builder.nonterminals == [A, B, C]);
+	assert(builder.terminals[] == [c, b, Ω]);
+	assert(builder.nonterminals[] == [A, B, C]);
 
 	// Validate rules and ordering.
-	assert(builder.productions == [
+	assert(builder.productions[] == [
 		new Production(A, [B, C, Ω]),
 		new Production(B, [b, B], [epsilon]),
 		new Production(C, [c], [epsilon])
@@ -1144,7 +1028,7 @@ unittest
 	auto table = builder.buildParseTable;
 
 	// Validate rules and ordering.
-	assert(builder.productions == [
+	assert(builder.productions[] == [
 		new Production(A, [B, C, Ω]),
 		new Production(B, [b, B], [epsilon]),
 		new Production(C, [c], [epsilon])
@@ -1228,11 +1112,11 @@ unittest
 		.addRule(P, [One]);
 
 	// Validate token sets.
-	assert(builder.terminals == [One, Plus]);
-	assert(builder.nonterminals == [E, P]);
+	assert(builder.terminals[] == [One, Plus]);
+	assert(builder.nonterminals[] == [E, P]);
 
 	// Validate rules and ordering.
-	assert(builder.productions == [
+	assert(builder.productions[] == [
 		new Production(E, [E, Plus, E], [P]),
 		new Production(P, [One])
 	]);
@@ -1240,10 +1124,10 @@ unittest
 	auto table = builder.buildParseTable;
 
 	// Validate rules and ordering.
-	assert(builder.productions == [
+	assert(builder.productions[] == [
 		new Production(E, [P, F]),
 		new Production(P, [One]),
-		new Production(F, [Plus, P, F], [epsilon])
+		new Production(F, [Plus, E], [epsilon])
 	]);
 
 	// Validate FIRST sets.
@@ -1326,23 +1210,23 @@ unittest
 		.addRule(P, [One]);
 
 	// Validate token sets.
-	assert(builder.terminals == [One, Plus]);
-	assert(builder.nonterminals == [E, P]);
+	assert(builder.terminals[] == [One, Plus]);
+	assert(builder.nonterminals[] == [E, P]);
 
 	// Validate rules and ordering.
-	assert(builder.productions == [
+	assert(builder.productions[] == [
 		new Production(E, [E, Plus, E], [E, Plus, Plus, E], [P]),
 		new Production(P, [One])
 	]);
 	
 	auto table = builder.buildParseTable;
-	
+
 	// Validate rules and ordering.
-	assert(builder.productions == [
+	assert(builder.productions[] == [
 		new Production(E, [P, F]),
 		new Production(P, [One]),
-		new Production(F, [Plus, G], [epsilon]),
-		new Production(G, [P, F], [Plus, P, F])
+		new Production(F, [epsilon], [Plus, G]),
+		new Production(G, [E], [Plus, E])
 	]);
 
 	// Validate FIRST sets.
@@ -1450,6 +1334,13 @@ unittest
 
 	auto table = builder.buildParseTable;
 
+	// Validate rules and ordering.
+	assert(builder.productions[] == [
+		new Production(E, [P, F]),
+		new Production(P, [One], [Two]),
+		new Production(F, [Plus, E], [Minus, E], [epsilon])
+	]);
+
 	// TODO
 }
 
@@ -1506,8 +1397,8 @@ unittest
 			.addRule(P, [One]);
 
 		// Validate token sets.
-		assert(builder.terminals == [One, Plus]);
-		assert(builder.nonterminals == [E, P]);
+		assert(builder.terminals[] == [One, Plus]);
+		assert(builder.nonterminals[] == [E, P]);
 
 		// Validate rules and ordering.
 		assert(builder.productions == [
@@ -1521,7 +1412,7 @@ unittest
 		assert(builder.productions == [
 			new Production(E, [P, F]),
 			new Production(P, [One]),
-			new Production(F, [Plus, P, F], [epsilon])
+			new Production(F, [Plus, E], [epsilon])
 		]);
 
 		// Validate FIRST sets.
@@ -1558,5 +1449,4 @@ unittest
 
 	// Compile time test.
 	static assert(testBuilder);
-
 }
