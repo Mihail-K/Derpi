@@ -142,6 +142,8 @@ abstract class Parser
  +/
 unittest
 {
+	import derpi.tree;
+
 	/++
 	 + Define grammar tokens.
 	 ++/
@@ -190,7 +192,7 @@ unittest
 
 		return builder.build;
 	}
-
+	
 	// Include the parser.
 	mixin(createParser);
 
@@ -208,7 +210,8 @@ unittest
 	try
 	{
 		// Parse input!
-		parser.E;
+		import std.stdio;
+		parser.E.writeln;
 	}
 	catch(Throwable t)
 	{

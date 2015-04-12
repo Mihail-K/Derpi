@@ -451,45 +451,6 @@ class GrammarBuilder
 		{
 			return getProduction(lhs).getBetaSets();
 		}
-
-		/++
-		 + Replaces ambiguous references to A in α with β.
-		 ++/
-		Token[][] expandAmbiguous(NonTerminal lhs, Token[][] alpha, Token[][] beta)
-		{
-			Token[][] result;
-
-			// α → α₁, α₂, ..., αₙ
-			foreach(alphaRule; alpha)
-			{
-				// If ε ∈ αᵢ
-				if(alphaRule.canFind(lhs))
-				{
-					// β → β₁, β₂, ..., βₘ
-					foreach(betaRule; beta)
-					{
-						Token[] rhs;
-
-						// Substitute A with β.
-						foreach(token; alphaRule)
-						{
-							if(token == lhs)
-							{
-								rhs ~= betaRule;
-							}
-							else
-							{
-								rhs ~= token;
-							}
-						}
-
-						result ~= rhs;
-					}
-				}
-			}
-
-			return result;
-		}
 		
 		void removeLeftRecursion()
 		{
@@ -923,14 +884,12 @@ class GrammarBuilder
 						if(token > epsilon)
 						{
 							string func = nonterminalNames[token];
-							buffer ~= format(`writeln("%s");`, func);
 							buffer ~= format("node.children ~= %s();", func);
 						}
 						// Check for terminal.
 						else if(token < epsilon)
 						{
 							buffer ~= format("expect(%d);", token);
-							buffer ~= format(`writeln("%d");`, token);
 							buffer ~= "node.children ~= new TerminalNode(last.text);";
 						}
 						// Epsilon.
