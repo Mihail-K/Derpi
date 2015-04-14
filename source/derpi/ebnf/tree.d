@@ -3,8 +3,55 @@ module derpi.ebnf.tree;
 
 import std.string;
 
+interface TreeNodeVisitor
+{
+
+	void visit(TerminalNode node);
+
+	void visit(PatternNode node);
+
+	void visit(LexerRuleRefNode node);
+
+	void visit(ParserRuleRefNode node);
+
+	void visit(GroupNode node);
+
+	void visit(OptionNode node);
+
+	void visit(RepeatNode node);
+
+	void visit(ComplementNode node);
+
+	void visit(AlterNode node);
+
+	void visit(ConcatNode node);
+
+	void visit(ParserRuleDeclarationNode node);
+
+	void visit(LexerRuleDeclarationNode node);
+
+	void visit(ParserRuleNode node);
+
+	void visit(LexerRuleNode node);
+
+	void visit(RootNode node);
+
+}
+
+mixin template VisitorImpl()
+{
+
+	override void accept(TreeNodeVisitor visitor)
+	{
+		return visitor.visit(this);
+	}
+
+}
+
 abstract class TreeNode
 {
+
+	abstract void accept(TreeNodeVisitor visitor);
 
 	abstract override string toString();
 
@@ -19,6 +66,8 @@ class TerminalNode : TreeNode
 	{
 		this.value = value;
 	}
+
+	mixin VisitorImpl;
 
 	override string toString()
 	{
@@ -37,6 +86,8 @@ class PatternNode : TreeNode
 		this.value = value;
 	}
 
+	mixin VisitorImpl;
+
 	override string toString()
 	{
 		return value;
@@ -53,6 +104,8 @@ class LexerRuleRefNode : TreeNode
 	{
 		this.name = name;
 	}
+
+	mixin VisitorImpl;
 
 	override string toString()
 	{
@@ -71,6 +124,8 @@ class ParserRuleRefNode : TreeNode
 		this.name = name;
 	}
 
+	mixin VisitorImpl;
+
 	override string toString()
 	{
 		return name;
@@ -88,6 +143,8 @@ class GroupNode : TreeNode
 		this.inner = inner;
 	}
 
+	mixin VisitorImpl;
+
 	override string toString()
 	{
 		return format("( %s )", inner);
@@ -104,6 +161,8 @@ class OptionNode : TreeNode
 	{
 		this.inner = inner;
 	}
+
+	mixin VisitorImpl;
 
 	override string toString()
 	{
@@ -124,6 +183,8 @@ class RepeatNode : TreeNode
 		this.oneOrMore = oneOrMore;
 	}
 
+	mixin VisitorImpl;
+
 	override string toString()
 	{
 		return format("{ %s }", inner) ~ (oneOrMore ? "+" : "");
@@ -141,6 +202,8 @@ class ComplementNode : TreeNode
 		this.inner = inner;
 	}
 
+	mixin VisitorImpl;
+
 	override string toString()
 	{
 		return format("~%s", inner);
@@ -153,6 +216,8 @@ class AlterNode : TreeNode
 
 	TreeNode[] nodes;
 
+	mixin VisitorImpl;
+
 	override string toString()
 	{
 		return format("%(%s%| | %)", nodes);
@@ -164,6 +229,8 @@ class ConcatNode : TreeNode
 {
 
 	TreeNode[] nodes;
+
+	mixin VisitorImpl;
 
 	override string toString()
 	{
@@ -183,6 +250,8 @@ class ParserRuleDeclarationNode : TreeNode
 		this.name = name;
 	}
 
+	mixin VisitorImpl;
+
 	override string toString()
 	{
 		return name;
@@ -200,6 +269,8 @@ class ParserRuleNode : TreeNode
 	{
 		this.declaration = declaration;
 	}
+
+	mixin VisitorImpl;
 
 	override string toString()
 	{
@@ -222,6 +293,8 @@ class LexerRuleDeclarationNode : TreeNode
 		this.name = name;
 	}
 
+	mixin VisitorImpl;
+
 	override string toString()
 	{
 		return name;
@@ -239,6 +312,8 @@ class LexerRuleNode : TreeNode
 	{
 		this.declaration = declaration;
 	}
+
+	mixin VisitorImpl;
 
 	override string toString()
 	{
@@ -261,6 +336,8 @@ class RootNode : TreeNode
 	{
 		this.name = name;
 	}
+
+	mixin VisitorImpl;
 	
 	override string toString()
 	{
