@@ -57,7 +57,7 @@ class LexerNodeVisitor : TreeNodeVisitor
 	/++
 	 + Creates a Primitive pattern from a Terminal.
 	 ++/
-	Pattern visit(TerminalNode node)
+	override Pattern visit(TerminalNode node)
 	{
 		// String enclosing quotes.
 		string text = node.value[1 .. $ - 1];
@@ -67,7 +67,7 @@ class LexerNodeVisitor : TreeNodeVisitor
 	/++
 	 + Creates a pattern from a pattern rule.
 	 ++/
-	Pattern visit(PatternNode node)
+	override Pattern visit(PatternNode node)
 	{
 		Pattern[] patterns;
 
@@ -118,34 +118,25 @@ class LexerNodeVisitor : TreeNodeVisitor
 		return new Selection(patterns);
 	}
 
-	Pattern visit(LexerRuleRefNode node)
+	override Pattern visit(LexerRuleRefNode node)
 	{
 		// TODO : Reference rule.
 		return null;
 	}
 
-	/++
-	 + Parser rules references don't appear in lexer rules.
-	 ++/
-	Pattern visit(ParserRuleRefNode node)
-	{
-		// Do nothing.
-		return null;
-	}
-
-	Pattern visit(GroupNode node)
+	override Pattern visit(GroupNode node)
 	{
 		return cast(Pattern)node.inner.accept(this);
 	}
 
-	Pattern visit(OptionNode node)
+	override Pattern visit(OptionNode node)
 	{
 		return new Optional(
 			cast(Pattern)node.inner.accept(this)
 		);
 	}
 
-	Pattern visit(RepeatNode node)
+	override Pattern visit(RepeatNode node)
 	{
 		if(node.oneOrMore)
 		{
@@ -163,14 +154,14 @@ class LexerNodeVisitor : TreeNodeVisitor
 		}
 	}
 
-	Pattern visit(ComplementNode node)
+	override Pattern visit(ComplementNode node)
 	{
 		return new Complement(
 			cast(Pattern)node.inner.accept(this)
 		);
 	}
 
-	Pattern visit(AlterNode node)
+	override Pattern visit(AlterNode node)
 	{
 		Pattern[] patterns;
 
@@ -189,7 +180,7 @@ class LexerNodeVisitor : TreeNodeVisitor
 		}
 	}
 
-	Pattern visit(ConcatNode node)
+	override Pattern visit(ConcatNode node)
 	{
 		Pattern[] patterns;
 
@@ -208,25 +199,7 @@ class LexerNodeVisitor : TreeNodeVisitor
 		}
 	}
 
-	Pattern visit(ParserRuleDeclarationNode node)
-	{
-		// Do nothing.
-		return null;
-	}
-
-	Pattern visit(LexerRuleDeclarationNode node)
-	{
-		// Do nothing.
-		return null;
-	}
-
-	Pattern visit(ParserRuleNode node)
-	{
-		// Do nothing.
-		return null;
-	}
-
-	Pattern visit(LexerRuleNode node)
+	override Pattern visit(LexerRuleNode node)
 	{
 		auto pattern = cast(Pattern)node.node.accept(this);
 
@@ -256,7 +229,7 @@ class LexerNodeVisitor : TreeNodeVisitor
 		}
 	}
 
-	Pattern visit(RootNode node)
+	override Pattern visit(RootNode node)
 	{
 		// Visit lexer rules.
 		foreach(rule; node.lexerRules)
@@ -333,7 +306,7 @@ class ParserNodeVisitor : TreeNodeVisitor
 	 ++/
 	NonTerminal[string] nonterminals;
 
-	Ruleset visit(TerminalNode node)
+	override Ruleset visit(TerminalNode node)
 	{
 		// Strip enclosing quotes.
 		string text = node.value[1 .. $];
@@ -351,13 +324,7 @@ class ParserNodeVisitor : TreeNodeVisitor
 		}
 	}
 
-	Ruleset visit(PatternNode node)
-	{
-		// Do nothing.
-		return null;
-	}
-
-	Ruleset visit(LexerRuleRefNode node)
+	override Ruleset visit(LexerRuleRefNode node)
 	{
 		// Check that the lexer rule exists.
 		auto value = node.name in terminals;
@@ -372,7 +339,7 @@ class ParserNodeVisitor : TreeNodeVisitor
 		}
 	}
 
-	Ruleset visit(ParserRuleRefNode node)
+	override Ruleset visit(ParserRuleRefNode node)
 	{
 		// Check that the lexer rule exists.
 		auto value = node.name in nonterminals;
@@ -387,13 +354,13 @@ class ParserNodeVisitor : TreeNodeVisitor
 		}
 	}
 
-	Ruleset visit(GroupNode node)
+	override Ruleset visit(GroupNode node)
 	{
 		// TODO : Create new rule.
 		return null;
 	}
 
-	Ruleset visit(OptionNode node)
+	override Ruleset visit(OptionNode node)
 	{
 		// Create an alternative, empty rule.
 		Ruleset ruleset = cast(Ruleset)node.accept(this);
@@ -401,19 +368,13 @@ class ParserNodeVisitor : TreeNodeVisitor
 		return ruleset;
 	}
 
-	Ruleset visit(RepeatNode node)
+	override Ruleset visit(RepeatNode node)
 	{
 		// TODO : Create new rule.
 		return null;
 	}
 
-	Ruleset visit(ComplementNode node)
-	{
-		// Do nothing.
-		return null;
-	}
-
-	Ruleset visit(AlterNode node)
+	override Ruleset visit(AlterNode node)
 	{
 		Ruleset ruleset = new Ruleset;
 
@@ -425,7 +386,7 @@ class ParserNodeVisitor : TreeNodeVisitor
 		return ruleset;
 	}
 
-	Ruleset visit(ConcatNode node)
+	override Ruleset visit(ConcatNode node)
 	{
 		Ruleset ruleset = new Ruleset;
 
@@ -437,32 +398,14 @@ class ParserNodeVisitor : TreeNodeVisitor
 		return ruleset;
 	}
 
-	Ruleset visit(ParserRuleDeclarationNode node)
-	{
-		// Do nothing.
-		return null;
-	}
-
-	Ruleset visit(LexerRuleDeclarationNode node)
-	{
-		// Do nothing.
-		return null;
-	}
-
-	Ruleset visit(ParserRuleNode node)
+	override Ruleset visit(ParserRuleNode node)
 	{
 		// TODO
 		node.node.accept(this);
 		return null;
 	}
 
-	Ruleset visit(LexerRuleNode node)
-	{
-		// Do nothing.
-		return null;
-	}
-
-	Ruleset visit(RootNode node)
+	override Ruleset visit(RootNode node)
 	{
 		foreach(rule; node.parserRules)
 		{

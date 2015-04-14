@@ -3,38 +3,83 @@ module derpi.ebnf.tree;
 
 import std.string;
 
-interface TreeNodeVisitor
+abstract class TreeNodeVisitor
 {
 
-	Object visit(TerminalNode node);
+	Object visit(TerminalNode node)
+	{
+		return null;
+	}
 
-	Object visit(PatternNode node);
+	Object visit(PatternNode node)
+	{
+		return null;
+	}
 
-	Object visit(LexerRuleRefNode node);
+	Object visit(LexerRuleRefNode node)
+	{
+		return null;
+	}
 
-	Object visit(ParserRuleRefNode node);
+	Object visit(ParserRuleRefNode node)
+	{
+		return null;
+	}
 
-	Object visit(GroupNode node);
+	Object visit(GroupNode node)
+	{
+		return null;
+	}
 
-	Object visit(OptionNode node);
+	Object visit(OptionNode node)
+	{
+		return null;
+	}
 
-	Object visit(RepeatNode node);
+	Object visit(RepeatNode node)
+	{
+		return null;
+	}
 
-	Object visit(ComplementNode node);
+	Object visit(ComplementNode node)
+	{
+		return null;
+	}
 
-	Object visit(AlterNode node);
+	Object visit(AlterNode node)
+	{
+		return null;
+	}
 
-	Object visit(ConcatNode node);
+	Object visit(ConcatNode node)
+	{
+		return null;
+	}
 
-	Object visit(ParserRuleDeclarationNode node);
+	Object visit(ParserRuleDeclarationNode node)
+	{
+		return null;
+	}
 
-	Object visit(LexerRuleDeclarationNode node);
+	Object visit(LexerRuleDeclarationNode node)
+	{
+		return null;
+	}
 
-	Object visit(ParserRuleNode node);
+	Object visit(ParserRuleNode node)
+	{
+		return null;
+	}
 
-	Object visit(LexerRuleNode node);
+	Object visit(LexerRuleNode node)
+	{
+		return null;
+	}
 
-	Object visit(RootNode node);
+	Object visit(RootNode node)
+	{
+		return null;
+	}
 
 }
 
