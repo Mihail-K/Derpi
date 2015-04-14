@@ -19,7 +19,7 @@ private struct LexerRule
 
 }
 
-private enum LexerRules : LexerRule
+package enum LexerRules : LexerRule
 {
 
 	/+ - Internal Rules - +/

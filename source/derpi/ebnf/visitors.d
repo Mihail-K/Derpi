@@ -2,9 +2,30 @@
 module derpi.ebnf.visitors;
 
 import std.algorithm;
+import std.string;
 
 import derpi.pattern;
+import derpi.ebnf.lexer;
 import derpi.ebnf.tree;
+
+char unescape(string input)
+{
+	switch(input)
+	{
+		case "\\0":  return '\0';
+		case "\\\\": return '\\';
+		case "\\b":  return '\b';
+		case "\\f":  return '\f';
+		case "\\n":  return '\n';
+		case "\\r":  return '\r';
+		case "\\t":  return '\t';
+		case "\\'":  return '\'';
+		case "\\\"": return '"';
+		case "\\/":  return '/';
+		case "\\-":  return '-';
+		default:     return input[0];
+	}
+}
 
 class LexerNodeVisitor : TreeNodeVisitor
 {
@@ -18,8 +39,52 @@ class LexerNodeVisitor : TreeNodeVisitor
 
 	Pattern visit(PatternNode node)
 	{
-		 // TODO : Parse pattern.
-		return null;
+		Pattern[] patterns;
+
+		// Strip enclosing slashes.
+		string input = node.value[1 .. $ - 1];
+
+		while(input.length > 0)
+		{
+			string element = LexerRules._PatternElement.match(input);
+			if(element is null) assert(0, "Malformed pattern.");
+			input = input[element.length .. $];
+
+			if(element == "\\-")
+			{
+				// Add the escaped dash.
+				patterns ~= new Primitive("-");
+			}
+			else
+			{
+				// Check if we're defining a range.
+				int dash = element.countUntil('-');
+
+				// Check if we're at an escaped dash.
+				if(dash > 0 && element.startsWith("\\-"))
+				{
+					dash++;
+				}
+
+				if(dash != -1)
+				{
+					// Create a bracket.
+					string min = element[0 .. dash - 1];
+					string max = element[dash + 1 .. $];
+					patterns ~= new Bracket(
+						min.unescape, max.unescape
+					);
+				}
+				else
+				{
+					patterns ~= new Primitive(
+						[element.unescape]
+					);
+				}
+			}
+		}
+
+		return new Selection(patterns);
 	}
 
 	Pattern visit(LexerRuleRefNode node)
