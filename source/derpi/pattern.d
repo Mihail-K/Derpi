@@ -192,3 +192,21 @@ class Complement : Pattern
 	}
 
 }
+
+class Optional : Pattern
+{
+
+	private Pattern pattern;
+
+	this(Pattern pattern)
+	{
+		this.pattern = pattern;
+	}
+
+	override string match(string input)
+	{
+		string result = pattern.match(input);
+		return result ? result : "";
+	}
+
+}
