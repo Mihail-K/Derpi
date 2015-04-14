@@ -4,10 +4,14 @@ module derpi.ebnf.visitors;
 import std.algorithm;
 import std.string;
 
+import derpi.helper;
 import derpi.pattern;
 import derpi.ebnf.lexer;
 import derpi.ebnf.tree;
 
+/++
+ + Returns an unescaped character from an escape sequence.
+ ++/
 char unescape(string input)
 {
 	switch(input)
@@ -30,13 +34,39 @@ char unescape(string input)
 class LexerNodeVisitor : TreeNodeVisitor
 {
 
+	/++
+	 + A serial id of the next terminal.
+	 ++/
+	Terminal nextTerminal = -2;
+
+	/++
+	 + The table of patterns.
+	 ++/
 	Pattern[string] patterns;
 
+	/++
+	 + A table of terminals, indexed by rule names.
+	 ++/
+	Terminal[string] ruleTable;
+
+	/++
+	 + A table of terminals, indexed by patterns.
+	 ++/
+	Terminal[string] patternTable;
+
+	/++
+	 + Creates a Primitive pattern from a Terminal.
+	 ++/
 	Pattern visit(TerminalNode node)
 	{
-		return new Primitive(node.value);
+		// String enclosing quotes.
+		string text = node.value[1 .. $ - 1];
+		return new Primitive(text);
 	}
 
+	/++
+	 + Creates a pattern from a pattern rule.
+	 ++/
 	Pattern visit(PatternNode node)
 	{
 		Pattern[] patterns;
@@ -94,6 +124,9 @@ class LexerNodeVisitor : TreeNodeVisitor
 		return null;
 	}
 
+	/++
+	 + Parser rules references don't appear in lexer rules.
+	 ++/
 	Pattern visit(ParserRuleRefNode node)
 	{
 		// Do nothing.
@@ -206,7 +239,16 @@ class LexerNodeVisitor : TreeNodeVisitor
 		// Check if an equivalent pattern exists.
 		if(patterns.values.countUntil(pattern) == -1)
 		{
-			return patterns[node.declaration.name] = pattern;
+			// Check if this is a primitive.
+			if(cast(Primitive)pattern)
+			{
+				patternTable[pattern.toString] = nextTerminal;
+			}
+
+			// Register the new terminal rule and pattern.
+			ruleTable[node.declaration.name] = nextTerminal--;
+			patterns[node.declaration.name] = pattern;
+			return pattern;
 		}
 		else
 		{
@@ -222,6 +264,211 @@ class LexerNodeVisitor : TreeNodeVisitor
 			rule.accept(this);
 		}
 
+		return null;
+	}
+
+}
+
+class Ruleset
+{
+
+	Token[][] rules;
+
+	this()
+	{
+	}
+
+	this(Token rule)
+	{
+		rules = [[rule]];
+	}
+
+	this(Token[][] rules)
+	{
+		this.rules = rules;
+	}
+
+	void opOpAssign(string op)(Ruleset other)
+	if(op == "+")
+	{
+		foreach(a; other.rules)
+		{
+			rules ~= a;
+		}
+	}
+
+	void opOpAssign(string op)(Ruleset other)
+	if(op == "~")
+	{
+		int[][] temp;
+
+		foreach(a; rules)
+		{
+			foreach(b; other.rules)
+			{
+				temp ~= a ~ b;
+			}
+		}
+
+		rules = temp;
+	}
+
+}
+
+class ParserNodeVisitor : TreeNodeVisitor
+{
+
+	/++
+	 + A table of terminals, indexed by names.
+	 ++/
+	Terminal[string] terminals;
+
+	/++
+	 + A table of terminals, indexed by patterns.
+	 ++/
+	Terminal[string] patternTable;
+
+	/++ 
+	 + A table of nonterminals, indexed by names.
+	 ++/
+	NonTerminal[string] nonterminals;
+
+	Ruleset visit(TerminalNode node)
+	{
+		// Strip enclosing quotes.
+		string text = node.value[1 .. $];
+
+		// Check that the pattern exists.
+		auto value = node.value in patternTable;
+
+		if(value !is null)
+		{
+			return new Ruleset(*value);
+		}
+		else
+		{
+			assert(0, "Undefined terminal " ~ node.value);
+		}
+	}
+
+	Ruleset visit(PatternNode node)
+	{
+		// Do nothing.
+		return null;
+	}
+
+	Ruleset visit(LexerRuleRefNode node)
+	{
+		// Check that the lexer rule exists.
+		auto value = node.name in terminals;
+
+		if(value !is null)
+		{
+			return new Ruleset(*value);
+		}
+		else
+		{
+			assert(0, "Undefined rule " ~ node.name);
+		}
+	}
+
+	Ruleset visit(ParserRuleRefNode node)
+	{
+		// Check that the lexer rule exists.
+		auto value = node.name in nonterminals;
+
+		if(value !is null)
+		{
+			return new Ruleset(*value);
+		}
+		else
+		{
+			assert(0, "Undefined rule " ~ node.name);
+		}
+	}
+
+	Ruleset visit(GroupNode node)
+	{
+		// TODO : Create new rule.
+		return null;
+	}
+
+	Ruleset visit(OptionNode node)
+	{
+		// Create an alternative, empty rule.
+		Ruleset ruleset = cast(Ruleset)node.accept(this);
+		ruleset.rules ~= [];
+		return ruleset;
+	}
+
+	Ruleset visit(RepeatNode node)
+	{
+		// TODO : Create new rule.
+		return null;
+	}
+
+	Ruleset visit(ComplementNode node)
+	{
+		// Do nothing.
+		return null;
+	}
+
+	Ruleset visit(AlterNode node)
+	{
+		Ruleset ruleset = new Ruleset;
+
+		foreach(child; node.nodes)
+		{
+			ruleset += cast(Ruleset)child.accept(this);
+		}
+
+		return ruleset;
+	}
+
+	Ruleset visit(ConcatNode node)
+	{
+		Ruleset ruleset = new Ruleset;
+
+		foreach(child; node.nodes)
+		{
+			ruleset ~= cast(Ruleset)child.accept(this);
+		}
+
+		return ruleset;
+	}
+
+	Ruleset visit(ParserRuleDeclarationNode node)
+	{
+		// Do nothing.
+		return null;
+	}
+
+	Ruleset visit(LexerRuleDeclarationNode node)
+	{
+		// Do nothing.
+		return null;
+	}
+
+	Ruleset visit(ParserRuleNode node)
+	{
+		// TODO
+		node.node.accept(this);
+		return null;
+	}
+
+	Ruleset visit(LexerRuleNode node)
+	{
+		// Do nothing.
+		return null;
+	}
+
+	Ruleset visit(RootNode node)
+	{
+		foreach(rule; node.parserRules)
+		{
+			rule.accept(this);
+		}
+		
 		return null;
 	}
 
