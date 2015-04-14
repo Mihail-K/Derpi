@@ -69,10 +69,11 @@ class LexerNodeVisitor : TreeNodeVisitor
 				if(dash != -1)
 				{
 					// Create a bracket.
-					string min = element[0 .. dash - 1];
+					string min = element[0 .. dash];
 					string max = element[dash + 1 .. $];
 					patterns ~= new Bracket(
-						min.unescape, max.unescape
+						min.unescape,
+						max.unescape
 					);
 				}
 				else
