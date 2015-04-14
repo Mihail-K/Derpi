@@ -2,6 +2,7 @@
 module derpi.pattern;
 
 import std.array;
+import std.conv;
 import std.string;
 
 abstract class Pattern
@@ -12,6 +13,8 @@ abstract class Pattern
 	abstract string match(string input);
 
 	abstract override bool opEquals(Object o);
+
+	abstract override string toString();
 
 }
 
@@ -33,6 +36,11 @@ class Empty : Pattern
 		return cast(Empty)o !is null;
 	}
 
+	override string toString()
+	{
+		return "";
+	}
+
 }
 
 class Wildcard : Pattern
@@ -40,17 +48,22 @@ class Wildcard : Pattern
 
 	override bool isNullable()
 	{
-		return true;
+		return false;
 	}
 
 	override string match(string input)
 	{
-		return input.length ? [input[0]] : "";
+		return input.length ? [input[0]] : null;
 	}
 
 	override bool opEquals(Object o)
 	{
 		return cast(Wildcard)o !is null;
+	}
+
+	override string toString()
+	{
+		return "*";
 	}
 
 }
@@ -79,6 +92,11 @@ class Primitive : Pattern
 	{
 		auto other = cast(Primitive)o;
 		return other ? value == other.value : false;
+	}
+
+	override string toString()
+	{
+		return value;
 	}
 
 }
@@ -115,6 +133,11 @@ class Bracket : Pattern
 	{
 		auto other = cast(Bracket)o;
 		return other ? min == other.min && max == other.max : false;
+	}
+
+	override string toString()
+	{
+		return "[" ~ min ~ "-" ~ max ~ "]";
 	}
 
 }
@@ -170,6 +193,15 @@ class Sequence : Pattern
 		return other ? patterns == other.patterns : false;
 	}
 
+	override string toString()
+	{
+		import std.algorithm;
+		return "(" ~ patterns
+			.map!(p => p.toString)
+			.joiner(" ").text
+			~ ")";
+	}
+
 }
 
 class Selection : Pattern
@@ -214,6 +246,15 @@ class Selection : Pattern
 	{
 		auto other = cast(Selection)o;
 		return other ? patterns == other.patterns : false;
+	}
+
+	override string toString()
+	{
+		import std.algorithm;
+		return "(" ~ patterns
+			.map!(p => p.toString)
+			.joiner(" | ").text
+			~ ")";
 	}
 
 }
@@ -264,6 +305,11 @@ class Repetition : Pattern
 		return other ? pattern == other.pattern : false;
 	}
 
+	override string toString()
+	{
+		return pattern.toString ~ "*";
+	}
+
 }
 
 class Complement : Pattern
@@ -297,6 +343,11 @@ class Complement : Pattern
 		return other ? pattern == other.pattern : false;
 	}
 
+	override string toString()
+	{
+		return "~" ~ pattern.toString;
+	}
+
 }
 
 class Optional : Pattern
@@ -324,6 +375,11 @@ class Optional : Pattern
 	{
 		auto other = cast(Optional)o;
 		return other ? pattern == other.pattern : false;
+	}
+
+	override string toString()
+	{
+		return pattern.toString ~ "?";
 	}
 
 }
