@@ -679,7 +679,7 @@ class GrammarBuilder
 					// If ε ∈ FIRST(α)
 					if(epsilon in falpha)
 					{
-						// PREDICT(A → α) ∪ FOLLOW(A)
+						// PREDICT(A → α) := FIRST(α) ∪ FOLLOW(A)
 						predictSets[rule] ~= follow(production.lhs);
 					}
 				}

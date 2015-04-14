@@ -1,6 +1,8 @@
 
 module derpi.ebnf.visitors;
 
+import std.algorithm;
+
 import derpi.pattern;
 import derpi.ebnf.tree;
 
@@ -127,9 +129,23 @@ class LexerNodeVisitor : TreeNodeVisitor
 
 	Pattern visit(LexerRuleNode node)
 	{
-		// TODO : Filter duplicates.
 		auto pattern = cast(Pattern)node.node.accept(this);
-		return patterns[node.declaration.name] = pattern;
+
+		// Check if the pattern can match ε.
+		if(pattern.isNullable)
+		{
+			assert(0, "Pattern can match an empty string.");
+		}
+
+		// Check if an equivalent pattern exists.
+		if(patterns.values.countUntil(pattern) == -1)
+		{
+			return patterns[node.declaration.name] = pattern;
+		}
+		else
+		{
+			assert(0, "Duplicate lexer rule.");
+		}
 	}
 
 	Pattern visit(RootNode node)

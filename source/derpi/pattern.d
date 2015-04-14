@@ -7,16 +7,30 @@ import std.string;
 abstract class Pattern
 {
 
+	abstract bool isNullable();
+
 	abstract string match(string input);
+
+	abstract override bool opEquals(Object o);
 
 }
 
 class Empty : Pattern
 {
 
+	override bool isNullable()
+	{
+		return true;
+	}
+
 	override string match(string)
 	{
 		return "";
+	}
+
+	override bool opEquals(Object o)
+	{
+		return cast(Empty)o !is null;
 	}
 
 }
@@ -24,9 +38,19 @@ class Empty : Pattern
 class Wildcard : Pattern
 {
 
+	override bool isNullable()
+	{
+		return true;
+	}
+
 	override string match(string input)
 	{
 		return input.length ? [input[0]] : "";
+	}
+
+	override bool opEquals(Object o)
+	{
+		return cast(Wildcard)o !is null;
 	}
 
 }
@@ -41,9 +65,20 @@ class Primitive : Pattern
 		this.value = value;
 	}
 
+	override bool isNullable()
+	{
+		return false;
+	}
+
 	override string match(string input)
 	{
 		return input.startsWith(value) ? value : null;
+	}
+
+	override bool opEquals(Object o)
+	{
+		auto other = cast(Primitive)o;
+		return other ? value == other.value : false;
 	}
 
 }
@@ -60,6 +95,11 @@ class Bracket : Pattern
 		this.max = max;
 	}
 
+	override bool isNullable()
+	{
+		return false;
+	}
+
 	override string match(string input)
 	{
 		if(input.length > 0)
@@ -69,6 +109,12 @@ class Bracket : Pattern
 		}
 
 		return null;
+	}
+
+	override bool opEquals(Object o)
+	{
+		auto other = cast(Bracket)o;
+		return other ? min == other.min && max == other.max : false;
 	}
 
 }
@@ -81,6 +127,19 @@ class Sequence : Pattern
 	this(Pattern[] patterns...)
 	{
 		this.patterns = patterns;
+	}
+
+	override bool isNullable()
+	{
+		foreach(pattern; patterns)
+		{
+			if(!pattern.isNullable)
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	override string match(string input)
@@ -105,6 +164,12 @@ class Sequence : Pattern
 		return buffer.data;
 	}
 
+	override bool opEquals(Object o)
+	{
+		auto other = cast(Sequence)o;
+		return other ? patterns == other.patterns : false;
+	}
+
 }
 
 class Selection : Pattern
@@ -115,6 +180,19 @@ class Selection : Pattern
 	this(Pattern[] patterns...)
 	{
 		this.patterns = patterns;
+	}
+
+	override bool isNullable()
+	{
+		foreach(pattern; patterns)
+		{
+			if(pattern.isNullable)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	override string match(string input)
@@ -132,6 +210,12 @@ class Selection : Pattern
 		return null;
 	}
 
+	override bool opEquals(Object o)
+	{
+		auto other = cast(Selection)o;
+		return other ? patterns == other.patterns : false;
+	}
+
 }
 
 class Repetition : Pattern
@@ -142,6 +226,11 @@ class Repetition : Pattern
 	this(Pattern pattern)
 	{
 		this.pattern = pattern;
+	}
+
+	override bool isNullable()
+	{
+		return pattern.isNullable;
 	}
 
 	override string match(string input)
@@ -169,6 +258,12 @@ class Repetition : Pattern
 		return buffer.data;
 	}
 
+	override bool opEquals(Object o)
+	{
+		auto other = cast(Repetition)o;
+		return other ? pattern == other.pattern : false;
+	}
+
 }
 
 class Complement : Pattern
@@ -181,6 +276,11 @@ class Complement : Pattern
 		this.pattern = pattern;
 	}
 
+	override bool isNullable()
+	{
+		return !pattern.isNullable;
+	}
+
 	override string match(string input)
 	{
 		if(pattern.match(input) is null)
@@ -189,6 +289,12 @@ class Complement : Pattern
 		}
 
 		return null;
+	}
+
+	override bool opEquals(Object o)
+	{
+		auto other = cast(Complement)o;
+		return other ? pattern == other.pattern : false;
 	}
 
 }
@@ -203,10 +309,21 @@ class Optional : Pattern
 		this.pattern = pattern;
 	}
 
+	override bool isNullable()
+	{
+		return true;
+	}
+
 	override string match(string input)
 	{
 		string result = pattern.match(input);
 		return result ? result : "";
+	}
+
+	override bool opEquals(Object o)
+	{
+		auto other = cast(Optional)o;
+		return other ? pattern == other.pattern : false;
 	}
 
 }
