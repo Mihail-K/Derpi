@@ -6,42 +6,42 @@ import std.string;
 interface TreeNodeVisitor
 {
 
-	void visit(TerminalNode node);
+	Object visit(TerminalNode node);
 
-	void visit(PatternNode node);
+	Object visit(PatternNode node);
 
-	void visit(LexerRuleRefNode node);
+	Object visit(LexerRuleRefNode node);
 
-	void visit(ParserRuleRefNode node);
+	Object visit(ParserRuleRefNode node);
 
-	void visit(GroupNode node);
+	Object visit(GroupNode node);
 
-	void visit(OptionNode node);
+	Object visit(OptionNode node);
 
-	void visit(RepeatNode node);
+	Object visit(RepeatNode node);
 
-	void visit(ComplementNode node);
+	Object visit(ComplementNode node);
 
-	void visit(AlterNode node);
+	Object visit(AlterNode node);
 
-	void visit(ConcatNode node);
+	Object visit(ConcatNode node);
 
-	void visit(ParserRuleDeclarationNode node);
+	Object visit(ParserRuleDeclarationNode node);
 
-	void visit(LexerRuleDeclarationNode node);
+	Object visit(LexerRuleDeclarationNode node);
 
-	void visit(ParserRuleNode node);
+	Object visit(ParserRuleNode node);
 
-	void visit(LexerRuleNode node);
+	Object visit(LexerRuleNode node);
 
-	void visit(RootNode node);
+	Object visit(RootNode node);
 
 }
 
 mixin template VisitorImpl()
 {
 
-	override void accept(TreeNodeVisitor visitor)
+	override Object accept(TreeNodeVisitor visitor)
 	{
 		return visitor.visit(this);
 	}
@@ -51,7 +51,7 @@ mixin template VisitorImpl()
 abstract class TreeNode
 {
 
-	abstract void accept(TreeNodeVisitor visitor);
+	abstract Object accept(TreeNodeVisitor visitor);
 
 	abstract override string toString();
 
