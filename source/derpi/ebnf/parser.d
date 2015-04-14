@@ -3,6 +3,7 @@ module derpi.ebnf.parser;
 
 import derpi.helper;
 import derpi.ebnf.lexer;
+import derpi.ebnf.tree;
 
 class DerpiParser
 {
@@ -62,16 +63,24 @@ class DerpiParser
 		}
 	}
 
-	void parse()
+	RootNode parse()
 	{
+		RootNode node;
+
 		// Advance to initial symbol.
 		advance;
 
 		// grammar <name> .
 		expect("KeyGrammar");
-		if(!accept("GrammarName"))
+		if(!accept("GrammarName") &&
+				!accept("LexerRuleName") &&
+				!accept("ParserRuleName"))
 		{
-			expect("ParserRuleName");
+			assert(0, "Missing grammar name.");
+		}
+		else
+		{
+			node = new RootNode(last.text);
 		}
 		expect("OpTerminate");
 
@@ -79,11 +88,11 @@ class DerpiParser
 		{
 			if(match("LexerRuleName"))
 			{
-				lexerRule;
+				node.lexerRules ~= lexerRule;
 			}
 			else if(match("ParserRuleName"))
 			{
-				parserRule;
+				node.parserRules ~= parserRule;
 			}
 			else
 			{
@@ -92,110 +101,136 @@ class DerpiParser
 		}
 
 		expect("EOF");
+		return node;
 	}
 	
-	void lexerRule()
+	LexerRuleNode lexerRule()
 	{
-		lexerRuleDeclaration;
-		
+		auto decl = lexerRuleDeclaration;
 		expect("OpDefine");
 
-		lexerRuleBody;
+		auto node = new LexerRuleNode(decl);
 
+		node.node = lexerRuleBody;
 		expect("OpTerminate");
+
+		return node;
 	}
 
-	void parserRule()
+	ParserRuleNode parserRule()
 	{
-		parserRuleDeclaration;
-
+		auto decl = parserRuleDeclaration;
 		expect("OpDefine");
 
-		parserRuleBody;
+		auto node = new ParserRuleNode(decl);
 
+		node.node = parserRuleBody;
 		expect("OpTerminate");
+
+		return node;
 	}
 
-	void lexerRuleDeclaration()
+	LexerRuleDeclarationNode lexerRuleDeclaration()
 	{
 		expect("LexerRuleName");
+		auto node = new LexerRuleDeclarationNode(last.text);
 
 		if(accept("OpMeta"))
 		{
 			// TODO
 			expect("ParserRuleName");
+			node.meta = last.text;
 		}
+
+		return node;
 	}
 
-	void parserRuleDeclaration()
+	ParserRuleDeclarationNode parserRuleDeclaration()
 	{
 		expect("ParserRuleName");
+		auto node = new ParserRuleDeclarationNode(last.text);
 
 		if(accept("OpMeta"))
 		{
 			// TODO
 			expect("ParserRuleName");
+			node.meta = last.text;
 		}
+
+		return node;
 	}
 
-	void lexerRuleBody()
+	TreeNode lexerRuleBody()
 	{
-		lexerRuleComma;
+		return lexerRuleComma;
 	}
 
-	void lexerRuleComma()
+	ConcatNode lexerRuleComma()
 	{
-		lexerRuleAlter;
+		auto node = new ConcatNode;
+		node.nodes ~= lexerRuleAlter;
 
 		while(accept("OpConcat"))
 		{
-			lexerRuleAlter;
+			node.nodes ~= lexerRuleAlter;
 		}
+
+		return node;
 	}
 
-	void lexerRuleAlter()
+	AlterNode lexerRuleAlter()
 	{
-		lexerRuleMain;
+		auto node = new AlterNode;
+		node.nodes ~= lexerRuleMain;
 
 		while(accept("OpAlter"))
 		{
-			lexerRuleMain;
+			node.nodes ~= lexerRuleMain;
 		}
+
+		return node;
 	}
 
-	void lexerRuleMain()
+	TreeNode lexerRuleMain()
 	{
 		if(accept("OpRepeatOpen"))
 		{
-			lexerRuleBody;
+			auto inner = lexerRuleBody;
 			expect("OpRepeatClose");
-			accept("OpRepeatOnce");
+			bool once = accept("OpRepeatOnce");
+
+			return new RepeatNode(inner, once);
 		}
 		else if(accept("OpOptionOpen"))
 		{
-			lexerRuleBody;
+			auto inner = lexerRuleBody;
 			expect("OpOptionClose");
+
+			return new OptionNode(inner);
 		}
 		else if(accept("OpGroupOpen"))
 		{
-			lexerRuleBody;
+			auto inner = lexerRuleBody;
 			expect("OpGroupClose");
+
+			return new GroupNode(inner);
 		}
 		else if(accept("OpComplement"))
 		{
-			lexerRuleBody;
+			auto inner = lexerRuleBody;
+			return new ComplementNode(inner);
 		}
 		else if(accept("LexerRuleName"))
 		{
-			// TODO
+			return new LexerRuleRefNode(last.text);
 		}
 		else if(accept("Terminal"))
 		{
-			// TODO
+			return new TerminalNode(last.text);
 		}
 		else if(accept("Pattern"))
 		{
-			// TODO
+			return new PatternNode(last.text);
 		}
 		else
 		{
@@ -203,60 +238,72 @@ class DerpiParser
 		}
 	}
 
-	void parserRuleBody()
+	TreeNode parserRuleBody()
 	{
-		parserRuleComma;
+		return parserRuleComma;
 	}
 
-	void parserRuleComma()
+	ConcatNode parserRuleComma()
 	{
-		parserRuleAlter;
+		auto node = new ConcatNode;
+		node.nodes ~= parserRuleAlter;
 
 		while(accept("OpConcat"))
 		{
-			parserRuleAlter;
+			node.nodes ~= parserRuleAlter;
 		}
+
+		return node;
 	}
 
-	void parserRuleAlter()
+	AlterNode parserRuleAlter()
 	{
-		parserRuleMain;
+		auto node = new AlterNode;
+		node.nodes ~= parserRuleMain;
 
 		while(accept("OpAlter"))
 		{
-			parserRuleMain;
+			node.nodes ~= parserRuleMain;
 		}
+		
+		return node;
 	}
 
-	void parserRuleMain()
+	TreeNode parserRuleMain()
 	{
 		if(accept("OpRepeatOpen"))
 		{
-			parserRuleBody;
+			auto inner = parserRuleBody;
 			expect("OpRepeatClose");
-			accept("OpRepeatOnce");
+			bool once = accept("OpRepeatOnce");
+
+			return new RepeatNode(inner, once);
 		}
 		else if(accept("OpOptionOpen"))
 		{
-			parserRuleBody;
+			auto inner = parserRuleBody;
 			expect("OpOptionClose");
+
+			return new OptionNode(inner);
 		}
 		else if(accept("OpGroupOpen"))
 		{
-			parserRuleBody;
+			auto inner = parserRuleBody;
 			expect("OpGroupClose");
+
+			return new GroupNode(inner);
 		}
 		else if(accept("ParserRuleName"))
 		{
-			// TODO
+			return new ParserRuleRefNode(last.text);
 		}
 		else if(accept("LexerRuleName"))
 		{
-			// TODO
+			return new LexerRuleRefNode(last.text);
 		}
 		else if(accept("Terminal"))
 		{
-			// TODO
+			return new TerminalNode(last.text);
 		}
 		else
 		{
@@ -264,4 +311,200 @@ class DerpiParser
 		}
 	}
 
+}
+
+unittest
+{
+	import std.stdio;
+
+	auto tokens = tokenize(`
+grammar derpi .
+
+start
+	=	grammarDeclaration
+	,	{	lexerRule
+		|	parserRule
+		}
+	,	EOF
+	.
+
+grammarDeclaration
+	=	'grammar'
+	,	GrammarName
+	,	'.'
+	.
+
+lexerRule
+	=	lexerRuleDeclaration
+	,	'='
+	,	lexerRuleBody
+	,	'.'
+	.
+
+lexerRuleDeclaration
+	=	LexerRuleName
+	,	[	'::'
+		,	(	'promote'
+			|	'discard'
+			|	'keep'
+			)
+		]
+	.
+
+parserRule
+	=	ParserRuleName
+	,	'='
+	,	parserRuleBody
+	,	'.'
+	.
+
+lexerRuleBody
+	=	pattern
+	|	Terminal
+	|	LexerRuleName
+
+	|	(	'~'
+		,	lexerRuleBody
+		)
+
+	|	(	'('
+		,	lexerRuleBody
+		,	')'
+		)
+
+	|	(	'['
+		,	lexerRuleBody
+		,	']'
+		)
+
+	|	(	'{'
+		,	lexerRuleBody
+		,	'}'
+		,	[ '+' ]
+		)
+
+	|	(	lexerRuleBody
+		,	'|'
+		,	lexerRuleBody
+		)
+
+	|	(	lexerRuleBody
+		,	','
+		,	lexerRuleBody
+		)
+	.
+
+parserRuleBody
+	=	Terminal
+	|	LexerRuleName
+	|	ParserRuleName
+
+	|	(	'('
+		,	parserRuleBody
+		,	')'
+		)
+
+	|	(	'['
+		,	parserRuleBody
+		,	']'
+		)
+
+	|	(	'{'
+		,	parserRuleBody
+		,	'}'
+		,	[ '+' ]
+		)
+
+	|	(	parserRuleBody
+		,	'|'
+		,	parserRuleBody
+		)
+
+	|	(	parserRuleBody
+		,	','
+		,	parserRuleBody
+		)
+	.
+
+Pattern
+	=	'/'
+	,	{ PatternElement }+
+	,	'/'
+	.
+
+_PatternElement
+	=	(	_EscapeCharacter
+		|	'\\-'
+		|	'\\/'
+		|	~'/'
+		)
+	,	[	'-'
+		,	(	_EscapeCharacter
+			|	'\\-'
+			|	'\\/'
+			|	~'/'
+			)
+		]
+	.
+
+Terminal
+	=	(	"'"
+		,	{	_EscapeCharacter
+			|	~"'"
+			}+
+		,	"'"
+		)
+
+	|	(	'"'
+		,	{	_EscapeCharacter
+			|	~'"'
+			}+
+		,	'"'
+		)
+	.
+
+_EscapeCharacter
+	=	'\\'
+	,	/\\0bfnrt'"/
+	.
+
+LexerRuleName
+	=	[ '_' ]
+	,	/A-Z/
+	,	{ /_a-zA-Z0-9/ }
+	.
+
+ParserRuleName
+	=	[ '_' ]
+	,	/a-z/
+	,	{ /_a-zA-Z0-9/ }
+	.
+
+GrammarName
+	=	/_a-zA-Z/
+	,	{ /_a-zA-Z0-9/ }
+	.
+
+WhiteSpace :: discard
+	=	{ / \b\f\n\r\t/ }+
+	.
+
+LineComment :: discard
+	=	'//'
+	,	{	(	'\\'
+			,	EOL
+			)
+		|	~EOL
+		}
+	.
+
+BlockComment :: discard
+	=	'/*'
+	,	{ ~'*/' }
+	,	'*/'
+	.
+
+	`);
+
+	new DerpiParser(tokens).parse.writeln;
 }
