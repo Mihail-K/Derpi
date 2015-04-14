@@ -37,6 +37,66 @@ enum Token epsilon = 0;
 enum Terminal eof = -1;
 
 /++
+ + A simple read-only FIFO data type.
+ ++/
+class Queue(T)
+{
+
+	private
+	{
+
+		/++
+		 + The elements in the queue.
+		 ++/
+		T[] elements;
+
+		/++
+		 + The current position in the queue.
+		 ++/
+		size_t position;
+
+	}
+
+	/++
+	 + Constructs a new queue with an initial set of elements.
+	 ++/
+	this(T[] elements...)
+	{
+		this.elements = elements;
+	}
+
+	/++
+	 + Tests if the queue is empty.
+	 ++/
+	@property
+	bool empty()
+	{
+		return position >= elements.length;
+	}
+
+	/++
+	 + Returns the element at the front of the queue.
+	 ++/
+	T front()
+	{
+		if(empty) assert(0, "Empty queue!");
+		return elements[position];
+	}
+
+	/++
+	 + Returns the element at the front of the queue,
+	 + and advances position of the queue forward.
+	 ++/
+	T next()
+	{
+		T elem = front;
+		position++;
+		return elem;
+	}
+
+}
+
+/++
  + A simple implementation of the LIFO data type.
  ++/
 class Stack(T)
@@ -64,7 +124,7 @@ class Stack(T)
 	}
 
 	/++
-	 + Tests whether the stack is empty.
+	 + Tests if the stack is empty.
 	 ++/
 	@property
 	bool empty()
